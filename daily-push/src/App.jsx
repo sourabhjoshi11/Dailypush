@@ -39,7 +39,7 @@ const TEMPLATES = [
   },
 ];
 
-const GROQ_MODELS = ["llama-3.3-70b-versatile"];
+const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "compound-beta"];
 
 const STORAGE_KEY = "daily_push_config";
 
@@ -68,7 +68,7 @@ export default function App() {
   // Config (persisted)
   const [webhookUrl, setWebhookUrl] = useState("");
   const [groqKey, setGroqKey] = useState("");
-  const [groqModel, setGroqModel] = useState(GROQ_MODELS[0]);
+  const [groqModel, setGroqModel] = useState("llama-3.3-70b-versatile");
   const [fromEmail, setFromEmail] = useState("");
   const [configSaved, setConfigSaved] = useState(false);
 
