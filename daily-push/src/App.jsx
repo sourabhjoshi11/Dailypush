@@ -42,6 +42,7 @@ const TEMPLATES = [
 const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "compound-beta"];
 
 const STORAGE_KEY = "daily_push_config";
+const CUSTOM_TEMPLATE_KEY = "custom_templates";
 
 function loadConfig() {
   try {
@@ -72,12 +73,24 @@ export default function App() {
   const [fromEmail, setFromEmail] = useState("");
   const [configSaved, setConfigSaved] = useState(false);
 
+  const [customTemplates, setCustomTemplates] = useState([]);
+  const [showTemplateCreator, setShowTemplateCreator] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState("");
+  const [newTemplatePrompt, setNewTemplatePrompt] = useState("");
+  const [newTemplateFields, setNewTemplateFields] = useState([
+    { key: "done", label: "Main Content", placeholder: "Enter content..." }
+  ]);
+
   useEffect(() => {
     const cfg = loadConfig();
     if (cfg.webhookUrl) setWebhookUrl(cfg.webhookUrl);
     if (cfg.groqKey) setGroqKey(cfg.groqKey);
     if (cfg.groqModel) setGroqModel(cfg.groqModel);
     if (cfg.fromEmail) setFromEmail(cfg.fromEmail);
+
+    const savedTemplates =
+      JSON.parse(localStorage.getItem(CUSTOM_TEMPLATE_KEY) || "[]");
+    setCustomTemplates(savedTemplates);
   }, []);
 
   const handleSaveConfig = () => {
@@ -86,10 +99,54 @@ export default function App() {
     setTimeout(() => setConfigSaved(false), 2000);
   };
 
-  const template = TEMPLATES.find((t) => t.id === selectedTemplate);
+  const allTemplates = [...TEMPLATES, ...customTemplates];
+  const template = allTemplates.find((t) => t.id === selectedTemplate);
   const defaultSubject = `Daily Update — ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
 
   const handleFieldChange = (key, value) => setFormData((prev) => ({ ...prev, [key]: value }));
+  const addField = () => {
+    const fieldName = prompt("Field Name");
+    if (!fieldName) return;
+
+    setNewTemplateFields((prev) => [
+      ...prev,
+      {
+        key: fieldName.toLowerCase().replace(/\s+/g, "_"),
+        label: fieldName,
+        placeholder: ""
+      }
+    ]);
+  };
+
+  const saveCustomTemplate = () => {
+    if (!newTemplateName.trim()) return;
+
+    const template = {
+      id: `custom_${Date.now()}`,
+      name: newTemplateName,
+      icon: "📝",
+      fields: newTemplateFields,
+      prompt: (data) => {
+        let content = "";
+        Object.entries(data).forEach(([k,v]) => {
+          content += `${k}: ${v}\n`;
+        });
+        return `${newTemplatePrompt}\n\n${content}`;
+      }
+    };
+
+    const updated = [...customTemplates, template];
+    setCustomTemplates(updated);
+    localStorage.setItem(CUSTOM_TEMPLATE_KEY, JSON.stringify(updated));
+
+    setNewTemplateName("");
+    setNewTemplatePrompt("");
+    setNewTemplateFields([
+      { key: "done", label: "Main Content", placeholder: "Enter content..." }
+    ]);
+    setShowTemplateCreator(false);
+  };
+
 
   const refineWithGroq = async () => {
     if (!groqKey) { setErrorMsg("Add your Groq API key in ⚙ config first."); setStatus("error"); return; }
@@ -364,7 +421,7 @@ export default function App() {
             </h1>
             <p style={{ fontSize: 12, color: "#444", marginBottom: 32 }}>Pick the format for today's update.</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {TEMPLATES.map((t) => (
+              {allTemplates.map((t) => (
                 <div key={t.id} className={`template-card ${selectedTemplate === t.id ? "active" : ""}`} onClick={() => setSelectedTemplate(t.id)}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
@@ -483,7 +540,7 @@ export default function App() {
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="btn-ghost" onClick={() => setShowPreview(true)} style={{ fontSize: 11 }}>preview</button>
                 <button className="btn-primary" disabled={!recipientEmail || status === "sending"} onClick={sendViaWebhook}>
-                  {status === "sending" ? <span className="pulse">sending...</span> : "send via n8n →"}
+                  {status === "sending" ? <span className="pulse">sending...</span> : "send!!"}
                 </button>
               </div>
             </div>
