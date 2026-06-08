@@ -39,7 +39,7 @@ const TEMPLATES = [
   },
 ];
 
-const GROQ_MODELS = ["llama3-70b-8192", "mixtral-8x7b-32768", "gemma2-9b-it"];
+const GROQ_MODELS = ["llama-3.3-70b-versatile"];
 
 const STORAGE_KEY = "daily_push_config";
 
