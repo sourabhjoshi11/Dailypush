@@ -199,7 +199,27 @@ export default function App() {
         body: JSON.stringify({
           model: groqModel,
           messages: [
-            { role: "system", content: "You are a professional writing assistant. Refine and polish work updates. Be concise, clear, and professional. Return only plain text — no markdown, no bullet symbols, no ** bold **, no # headers, no formatting of any kind. Just clean readable text." },
+            { role: "system", content: `You are a professional writing assistant that refines and polishes work updates.
+Rewrite the provided content to be clear, concise, professional, and grammatically correct while preserving the original meaning, facts, technical details, and intent.
+
+Preserve all field labels exactly as provided.
+Output each field in the format: {Label}: {value} on a separate line.
+Maintain the original field order.
+
+Do not add, remove, infer, or modify information beyond improving wording and readability.
+
+Return only the final polished text.
+
+Do not include:
+- Markdown
+- Bullet points
+- Numbering
+- Headings
+- Explanations
+- Commentary
+- Greetings
+- Closing remarks
+- Any formatting of any kind` },
             { role: "user", content: prompt },
           ],
           max_tokens: 600,
