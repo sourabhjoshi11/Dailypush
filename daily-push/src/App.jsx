@@ -199,7 +199,7 @@ export default function App() {
         body: JSON.stringify({
           model: groqModel,
           messages: [
-            { role: "system", content: "You are a professional writing assistant. Refine and polish work updates. Be concise, clear, and professional. Return only the refined text, no explanations or preamble." },
+            { role: "system", content: "You are a professional writing assistant. Refine and polish work updates. Be concise, clear, and professional. Return only plain text — no markdown, no bullet symbols, no ** bold **, no # headers, no formatting of any kind. Just clean readable text." },
             { role: "user", content: prompt },
           ],
           max_tokens: 600,
@@ -207,7 +207,9 @@ export default function App() {
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Groq API error"); }
       const data = await res.json();
-      setRefinedContent(data.choices[0].message.content.trim());
+      const raw = data.choices[0].message.content.trim();
+      const clean = raw.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1').replace(/^#+\s/gm, '').replace(/^[-*]\s/gm, '');
+      setRefinedContent(clean);
       setStatus("refined"); setStep(3);
     } catch (e) { setErrorMsg(e.message); setStatus("error"); }
   };
