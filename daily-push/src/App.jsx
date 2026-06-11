@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
+// ── Constants ──────────────────────────────────────────────────────
 const DEFAULT_TEMPLATES = [
   {
-    id: "standup", name: "Daily Standup", isDefault: true,
+    id: "standup", name: "Daily Standup", isDefault: true, color: "#6366f1",
     fields: [
       { key: "done", label: "What I accomplished", placeholder: "Completed the login page UI, fixed 3 bugs in auth flow..." },
       { key: "blockers", label: "Blockers / Issues", placeholder: "Waiting on API keys from backend team..." },
@@ -11,7 +12,7 @@ const DEFAULT_TEMPLATES = [
     aiPrompt: "Refine this daily standup update into a concise, professional format. Keep it brief and to the point.\n\nDone: {{done}}\nBlockers: {{blockers}}\nTomorrow: {{tomorrow}}",
   },
   {
-    id: "progress", name: "Progress Report", isDefault: true,
+    id: "progress", name: "Progress Report", isDefault: true, color: "#06b6d4",
     fields: [
       { key: "done", label: "Accomplishments", placeholder: "Shipped v2.1 with dark mode, reviewed 4 PRs..." },
       { key: "metrics", label: "Key Metrics", placeholder: "Closed 7 tickets, 92% test coverage..." },
@@ -20,7 +21,7 @@ const DEFAULT_TEMPLATES = [
     aiPrompt: "Polish this progress report into a clear, professional summary. Make it engaging and highlight achievements.\n\nAccomplishments: {{done}}\nMetrics: {{metrics}}\nLearnings: {{learnings}}",
   },
   {
-    id: "client", name: "Client Update", isDefault: true,
+    id: "client", name: "Client Update", isDefault: true, color: "#8b5cf6",
     fields: [
       { key: "done", label: "Work Completed", placeholder: "Implemented the requested feature, tested on staging..." },
       { key: "status", label: "Project Status", placeholder: "On track for Friday deadline..." },
@@ -32,15 +33,16 @@ const DEFAULT_TEMPLATES = [
 
 const API_URL = "https://dailypush-backend.onrender.com";
 
-function buildPrompt(template, formData) {
+// ── Utility Functions ──────────────────────────────────────────────
+const buildPrompt = (template, formData) => {
   let prompt = template.aiPrompt || "";
   template.fields.forEach(f => {
     prompt = prompt.replace(new RegExp(`{{${f.key}}}`, "g"), formData[f.key] || "N/A");
   });
   return prompt;
-}
+};
 
-function parseTemplate(raw) {
+const parseTemplate = (raw) => {
   const lines = raw.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n").map(l=>l.trim()).filter(Boolean);
   const fields = []; const seenKeys = new Set();
   lines.forEach(line => {
@@ -56,229 +58,419 @@ function parseTemplate(raw) {
     fields.push({ key, label, placeholder });
   });
   return fields;
-}
+};
 
-// ── Three-dot menu ──────────────────────────────────────────────────
-function ThreeDotMenu({ onEdit, onDelete }) {
+// ── Styles ─────────────────────────────────────────────────────────
+const styles = {
+  // Layout
+  body: {
+    minHeight: '100vh',
+    background: '#09090b',
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    color: '#fafafa',
+  },
+  
+  // Cards
+  glass: {
+    background: 'rgba(255, 255, 255, 0.03)',
+    backdropFilter: 'blur(20px)',
+    border: '1px solid rgba(255, 255, 255, 0.06)',
+    borderRadius: 16,
+  },
+  
+  glassHover: {
+    background: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+  },
+  
+  // Inputs
+  input: {
+    background: 'rgba(255, 255, 255, 0.03)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
+    padding: '14px 18px',
+    color: '#fafafa',
+    fontSize: 14,
+    outline: 'none',
+    transition: 'all 0.2s ease',
+    width: '100%',
+    fontFamily: "'Inter', sans-serif",
+  },
+  
+  inputFocus: {
+    border: '1px solid rgba(99, 102, 241, 0.5)',
+    boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.1)',
+    background: 'rgba(255, 255, 255, 0.05)',
+  },
+  
+  // Buttons
+  buttonPrimary: {
+    background: '#6366f1',
+    color: '#fff',
+    border: 'none',
+    padding: '12px 24px',
+    borderRadius: 12,
+    fontSize: 14,
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    fontFamily: "'Inter', sans-serif",
+  },
+  
+  buttonSecondary: {
+    background: 'rgba(255, 255, 255, 0.05)',
+    color: '#a1a1aa',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    padding: '12px 24px',
+    borderRadius: 12,
+    fontSize: 14,
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    fontFamily: "'Inter', sans-serif",
+  },
+  
+  // Typography
+  heading: {
+    fontSize: 28,
+    fontWeight: 600,
+    letterSpacing: '-0.02em',
+    color: '#fafafa',
+    fontFamily: "'Inter', sans-serif",
+  },
+  
+  subtitle: {
+    fontSize: 14,
+    color: '#71717a',
+    lineHeight: 1.6,
+  },
+  
+  // Tags
+  tag: {
+    background: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: 6,
+    padding: '4px 10px',
+    fontSize: 12,
+    color: '#a1a1aa',
+  },
+};
+
+// ── Components ─────────────────────────────────────────────────────
+
+const MenuDots = ({ onEdit, onDelete }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef();
+  
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
+  
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={ref} style={{ position: 'relative' }}>
       <button
-        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
-        style={{ 
-          width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
-          background: "transparent", border: "1px solid #2a2a42", borderRadius: 8, color: "#94a3b8", 
-          cursor: "pointer", transition: "all .15s", padding: 0
+        onClick={e => { e.stopPropagation(); setOpen(!open); }}
+        style={{
+          width: 36, height: 36, borderRadius: 10,
+          background: 'transparent',
+          border: '1px solid rgba(255,255,255,0.08)',
+          color: '#71717a', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'all 0.2s',
         }}
-        onMouseOver={e => { e.currentTarget.style.borderColor = "#6366f1"; e.currentTarget.style.color = "#a5b4fc"; }}
-        onMouseOut={e => { e.currentTarget.style.borderColor = "#2a2a42"; e.currentTarget.style.color = "#94a3b8"; }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#fafafa'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#71717a'; }}
       >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-          <circle cx="7" cy="2" r="1.5"/>
-          <circle cx="7" cy="7" r="1.5"/>
-          <circle cx="7" cy="12" r="1.5"/>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="12" cy="8" r="1.5"/>
         </svg>
       </button>
       {open && (
-        <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", background: "#1a1a2e", border: "1px solid #2a2a42", borderRadius: 8, minWidth: 150, zIndex: 50, overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-          <button onClick={e => { e.stopPropagation(); setOpen(false); onEdit(); }} style={{ display: "block", width: "100%", background: "none", border: "none", color: "#cbd5e1", padding: "10px 16px", textAlign: "left", cursor: "pointer", fontSize: 13 }}
-            onMouseOver={e => e.currentTarget.style.background = "#252540"}
-            onMouseOut={e => e.currentTarget.style.background = "none"}
+        <div style={{
+          position: 'absolute', right: 0, top: 'calc(100% + 8px)',
+          background: '#18181b', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 12, minWidth: 160, zIndex: 50, overflow: 'hidden',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+        }}>
+          <button onClick={e => { e.stopPropagation(); setOpen(false); onEdit(); }}
+            style={{ display: 'block', width: '100%', padding: '12px 18px', textAlign: 'left',
+              background: 'none', border: 'none', color: '#d4d4d8', fontSize: 13, cursor: 'pointer',
+              transition: 'background 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'none'}
           >Edit template</button>
-          <button onClick={e => { e.stopPropagation(); setOpen(false); onDelete(); }} style={{ display: "block", width: "100%", background: "none", border: "none", color: "#f87171", padding: "10px 16px", textAlign: "left", cursor: "pointer", fontSize: 13 }}
-            onMouseOver={e => e.currentTarget.style.background = "#1a0808"}
-            onMouseOut={e => e.currentTarget.style.background = "none"}
+          <button onClick={e => { e.stopPropagation(); setOpen(false); onDelete(); }}
+            style={{ display: 'block', width: '100%', padding: '12px 18px', textAlign: 'left',
+              background: 'none', border: 'none', color: '#f87171', fontSize: 13, cursor: 'pointer',
+              transition: 'background 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(248,113,113,0.1)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'none'}
           >Delete template</button>
         </div>
       )}
     </div>
   );
-}
+};
 
-// ── Email chip input ────────────────────────────────────────────────
-function EmailChipInput({ label, chips, onChange, placeholder }) {
+const EmailInput = ({ label, chips, onChange, placeholder }) => {
   const [input, setInput] = useState("");
+  const [focused, setFocused] = useState(false);
+  const inputRef = useRef();
+  
   const addChip = (val) => {
     const emails = val.split(/[,;\s]+/).map(e => e.trim()).filter(e => e && e.includes("@"));
     if (emails.length) onChange([...chips, ...emails.filter(e => !chips.includes(e))]);
     setInput("");
   };
-  const removeChip = (i) => onChange(chips.filter((_, idx) => idx !== i));
+  
   return (
     <div>
-      <label style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</label>
-      <div style={{ background: "#13131f", border: "1.5px solid #1e2235", borderRadius: 8, padding: "8px 12px", minHeight: 46, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", cursor: "text", transition: "border-color .2s" }}
-        onClick={e => e.currentTarget.querySelector("input")?.focus()}>
+      <label style={{ fontSize: 12, color: '#a1a1aa', fontWeight: 600, display: 'block', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</label>
+      <div
+        onClick={() => inputRef.current?.focus()}
+        style={{
+          ...styles.input,
+          padding: '10px 14px',
+          minHeight: 48,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 8,
+          alignItems: 'center',
+          cursor: 'text',
+          ...(focused ? styles.inputFocus : {}),
+        }}
+      >
         {chips.map((chip, i) => (
-          <span key={i} style={{ background: "#1e1b4b", border: "1px solid #3730a3", borderRadius: 5, padding: "3px 8px", fontSize: 12, color: "#a5b4fc", display: "flex", alignItems: "center", gap: 5 }}>
+          <span key={i} style={{
+            background: 'rgba(99, 102, 241, 0.15)',
+            border: '1px solid rgba(99, 102, 241, 0.3)',
+            borderRadius: 6, padding: '3px 10px',
+            fontSize: 13, color: '#a5b4fc',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
             {chip}
-            <span onClick={() => removeChip(i)} style={{ cursor: "pointer", color: "#6366f1", fontSize: 14, lineHeight: 1, fontWeight: 600 }}>×</span>
+            <button onClick={() => onChange(chips.filter((_, idx) => idx !== i))}
+              style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 16, padding: 0, lineHeight: 1 }}>
+              ×
+            </button>
           </span>
         ))}
-        <input value={input} onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (["Enter",",",";","Tab"].includes(e.key)) { e.preventDefault(); addChip(input); } if (e.key==="Backspace"&&!input&&chips.length) removeChip(chips.length-1); }}
-          onBlur={() => input && addChip(input)}
-          onPaste={e => { e.preventDefault(); addChip(e.clipboardData.getData("text")); }}
-          placeholder={chips.length === 0 ? placeholder : ""}
-          style={{ border:"none", outline:"none", background:"transparent", color:"#e2e8f0", fontSize:14, fontFamily:"Inter,sans-serif", flex:1, minWidth:140 }}
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => { setFocused(false); if (input) addChip(input); }}
+          onKeyDown={e => {
+            if (['Enter', ',', ';', 'Tab'].includes(e.key)) { e.preventDefault(); addChip(input); }
+            if (e.key === 'Backspace' && !input && chips.length) onChange(chips.slice(0, -1));
+          }}
+          onPaste={e => { e.preventDefault(); addChip(e.clipboardData.getData('text')); }}
+          placeholder={chips.length === 0 ? placeholder : ''}
+          style={{ border: 'none', outline: 'none', background: 'transparent', color: '#fafafa', fontSize: 14, flex: 1, minWidth: 140, fontFamily: "'Inter', sans-serif" }}
         />
       </div>
-      <p style={{ fontSize: 11, color: "#64748b", marginTop: 5 }}>Press Enter or comma to add. Paste multiple at once.</p>
     </div>
   );
-}
+};
 
-// ── History page ────────────────────────────────────────────────────
-function HistoryPage({ apiUrl, user }) {
+const EmptyState = ({ icon, title, description }) => (
+  <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+    <div style={{ width: 80, height: 80, borderRadius: 20, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+      {icon}
+    </div>
+    <h3 style={{ fontSize: 18, color: '#d4d4d8', marginBottom: 8, fontWeight: 500 }}>{title}</h3>
+    <p style={{ fontSize: 14, color: '#71717a' }}>{description}</p>
+  </div>
+);
+
+const Spinner = () => (
+  <div style={{ width: 18, height: 18, border: '2px solid rgba(255,255,255,0.2)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.6s linear infinite', display: 'inline-block' }} />
+);
+
+// ── History Page ───────────────────────────────────────────────────
+const HistoryPage = ({ apiUrl, user }) => {
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
-  const [detailView, setDetailView] = useState(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("dp_token");
+    const token = localStorage.getItem('dp_token');
     fetch(`${apiUrl}/emails/history`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => { setEmails(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => setLoading(false));
   }, [apiUrl]);
 
-  const fmt = (d) => new Date(d).toLocaleDateString("en-IN", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" });
+  const formatDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
   if (loading) {
     return (
-      <main style={{ maxWidth: 760, margin: "0 auto", padding: "48px 24px" }}>
-        <div style={{ marginBottom: 32 }}>
-          <h1 style={{ fontSize: 22, fontFamily: "'Sora',sans-serif", fontWeight: 600, color: "#e2e8f0", marginBottom: 4 }}>Email History</h1>
-          <p style={{ fontSize: 13, color: "#94a3b8" }}>Loading your sent updates...</p>
+      <div style={{ maxWidth: 800, margin: '0 auto', padding: '60px 24px' }}>
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ width: 200, height: 28, background: 'rgba(255,255,255,0.05)', borderRadius: 6, marginBottom: 8 }} />
+          <div style={{ width: 140, height: 16, background: 'rgba(255,255,255,0.03)', borderRadius: 4 }} />
         </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          {[1,2,3].map(i => <div key={i} style={{ background:"#13131f", border:"1px solid #1a1a2e", borderRadius:12, height:88, animation:"pulse 1.5s infinite" }} />)}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {[1,2,3,4].map(i => (
+            <div key={i} style={{ ...styles.glass, padding: 24, height: 80, animation: 'pulse 1.5s infinite' }} />
+          ))}
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main style={{ maxWidth: 760, margin: "0 auto", padding: "48px 24px" }}>
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 22, fontFamily: "'Sora',sans-serif", fontWeight: 600, color: "#e2e8f0", marginBottom: 4 }}>Email History</h1>
-        <p style={{ fontSize: 13, color: "#94a3b8" }}>
-          {emails.length > 0 ? `${emails.length} update${emails.length !== 1 ? 's' : ''} from the last 5 days` : 'Your sent updates will appear here'}
-        </p>
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '60px 24px' }}>
+      <div style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1 style={{ fontSize: 32, fontWeight: 600, color: '#fafafa', marginBottom: 8, letterSpacing: '-0.02em' }}>Email History</h1>
+          <p style={{ fontSize: 14, color: '#71717a' }}>
+            {emails.length > 0 ? `${emails.length} update${emails.length !== 1 ? 's' : ''} from the last 5 days` : 'Track your sent updates'}
+          </p>
+        </div>
+        {emails.length > 0 && (
+          <div style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, fontSize: 12, color: '#a1a1aa' }}>
+            Last 5 days
+          </div>
+        )}
       </div>
 
       {emails.length === 0 ? (
-        <div style={{ textAlign:"center", padding:"72px 0" }}>
-          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#1a1a2e", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4a4a6a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-              <polyline points="22,6 12,13 2,6"/>
-            </svg>
-          </div>
-          <p style={{ fontSize:16, color:"#cbd5e1", marginBottom:8 }}>No emails sent yet</p>
-          <p style={{ fontSize:13, color:"#94a3b8" }}>Start sending updates to see them here</p>
-        </div>
+        <EmptyState 
+          icon={<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#52525b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>}
+          title="No emails yet"
+          description="Your sent updates will appear here once you start sending."
+        />
       ) : (
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {emails.map(e => {
-            const isOpen = expandedId === e.id;
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {emails.map(email => {
+            const isExpanded = expandedId === email.id;
+            const statusColor = email.status === 'sent' ? '#22c55e' : '#ef4444';
+            
             return (
-              <div key={e.id} style={{ 
-                background:"#13131f", 
-                border:`1px solid ${isOpen?"#3730a3":"#1a1a2e"}`, 
-                borderRadius:12, 
-                overflow:"hidden", 
-                transition:"border-color .2s"
+              <div key={email.id} style={{
+                ...styles.glass,
+                ...(isExpanded ? { border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)' } : {}),
+                borderRadius: 16,
+                overflow: 'hidden',
+                transition: 'all 0.3s ease',
               }}>
-                {/* Row header */}
-                <div style={{ padding:"16px 20px", cursor:"pointer", display:"flex", alignItems:"center", gap:14 }}
-                  onClick={() => setExpandedId(isOpen ? null : e.id)}>
-                  {/* Status dot */}
-                  <div style={{ 
-                    width:10, height:10, borderRadius:"50%", 
-                    background: e.status==="sent"?"#4ade80":"#f87171", flexShrink:0, 
-                    boxShadow: e.status==="sent"?"0 0 6px rgba(74,222,128,.5)":"0 0 6px rgba(248,113,113,.5)" 
+                {/* Header Row */}
+                <div
+                  onClick={() => setExpandedId(isExpanded ? null : email.id)}
+                  style={{
+                    padding: '20px 24px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 16,
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}
+                  onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {/* Status Indicator */}
+                  <div style={{
+                    width: 12, height: 12, borderRadius: '50%',
+                    background: statusColor,
+                    boxShadow: `0 0 12px ${statusColor}40`,
+                    flexShrink: 0,
                   }} />
-                  {/* Main info */}
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <p style={{ fontSize:14, color:"#e2e8f0", fontWeight:500, marginBottom:4, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{e.subject}</p>
-                    <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
-                      <span style={{ fontSize:12, color:"#94a3b8" }}>To: <span style={{ color:"#cbd5e1" }}>{e.to_emails?.slice(0,2).join(", ")}{e.to_emails?.length>2?` +${e.to_emails.length-2} more`:""}</span></span>
-                      {e.template_name && <span style={{ fontSize:11, color:"#a5b4fc", background:"rgba(99,102,241,.1)", border:"1px solid rgba(99,102,241,.2)", borderRadius:4, padding:"1px 6px" }}>{e.template_name}</span>}
+                  
+                  {/* Content */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+                      <h3 style={{ fontSize: 15, fontWeight: 500, color: '#fafafa', margin: 0 }}>{email.subject}</h3>
+                      {email.template_name && (
+                        <span style={{
+                          background: 'rgba(99,102,241,0.1)',
+                          border: '1px solid rgba(99,102,241,0.2)',
+                          borderRadius: 6,
+                          padding: '2px 8px',
+                          fontSize: 11,
+                          color: '#a5b4fc',
+                        }}>
+                          {email.template_name}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                      <span style={{ fontSize: 12, color: '#71717a' }}>
+                        To: {email.to_emails?.slice(0, 2).join(', ')}{email.to_emails?.length > 2 ? ` +${email.to_emails.length - 2}` : ''}
+                      </span>
                     </div>
                   </div>
-                  {/* Time + chevron */}
-                  <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
-                    <span style={{ fontSize:11, color:"#94a3b8" }}>{fmt(e.created_at)}</span>
-                    <span style={{ color:"#94a3b8", fontSize:12, transition:"transform .2s", transform: isOpen?"rotate(180deg)":"rotate(0deg)", display:"inline-block" }}>▾</span>
+                  
+                  {/* Right side */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+                    <span style={{ fontSize: 12, color: '#52525b' }}>{formatDate(email.created_at)}</span>
+                    <svg 
+                      width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#52525b" strokeWidth="2"
+                      style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                    >
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
                   </div>
                 </div>
 
-                {/* Expanded body */}
-                {isOpen && (
-                  <div style={{ borderTop:"1px solid #1a1a2e", padding:"20px 20px 24px" }}>
-                    {/* Recipients section */}
-                    <div style={{ marginBottom:18 }}>
-                      <p style={{ fontSize:11, color:"#94a3b8", fontWeight:600, marginBottom:10, textTransform:"uppercase", letterSpacing:"0.06em" }}>Recipients</p>
-                      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                        {e.to_emails?.length > 0 && (
-                          <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
-                            <span style={{ fontSize:11, color:"#6366f1", fontWeight:600, minWidth:40, textTransform:"uppercase" }}>To</span>
-                            <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                              {e.to_emails.map((em,i) => (
-                                <span key={i} style={{ fontSize:12, color:"#cbd5e1", background:"#0f0f1a", border:"1px solid #1e2235", borderRadius:4, padding:"2px 8px" }}>{em}</span>
-                              ))}
-                            </div>
+                {/* Expanded Content */}
+                {isExpanded && (
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '24px' }}>
+                    {/* Recipients Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
+                      {[
+                        { label: 'To', list: email.to_emails },
+                        { label: 'CC', list: email.cc_emails },
+                        { label: 'BCC', list: email.bcc_emails },
+                      ].filter(g => g.list?.length > 0).map(group => (
+                        <div key={group.label}>
+                          <div style={{ fontSize: 11, color: '#71717a', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                            {group.label}
                           </div>
-                        )}
-                        {e.cc_emails?.length > 0 && (
-                          <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
-                            <span style={{ fontSize:11, color:"#6366f1", fontWeight:600, minWidth:40, textTransform:"uppercase" }}>CC</span>
-                            <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                              {e.cc_emails.map((em,i) => (
-                                <span key={i} style={{ fontSize:12, color:"#cbd5e1", background:"#0f0f1a", border:"1px solid #1e2235", borderRadius:4, padding:"2px 8px" }}>{em}</span>
-                              ))}
-                            </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {group.list.map((em, i) => (
+                              <span key={i} style={styles.tag}>{em}</span>
+                            ))}
                           </div>
-                        )}
-                        {e.bcc_emails?.length > 0 && (
-                          <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
-                            <span style={{ fontSize:11, color:"#6366f1", fontWeight:600, minWidth:40, textTransform:"uppercase" }}>BCC</span>
-                            <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                              {e.bcc_emails.map((em,i) => (
-                                <span key={i} style={{ fontSize:12, color:"#cbd5e1", background:"#0f0f1a", border:"1px solid #1e2235", borderRadius:4, padding:"2px 8px" }}>{em}</span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Email Body */}
+                    <div style={{
+                      background: 'rgba(0,0,0,0.3)',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: 12,
+                      padding: '20px 24px',
+                    }}>
+                      <div style={{ fontSize: 11, color: '#71717a', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                        Message Content
+                      </div>
+                      <div style={{ fontSize: 14, color: '#d4d4d8', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                        {email.body}
                       </div>
                     </div>
 
-                    {/* Body */}
-                    <div style={{ background:"#0f0f1a", border:"1px solid #1e2235", borderRadius:10, padding:"20px" }}>
-                      <p style={{ fontSize:11, color:"#94a3b8", fontWeight:600, marginBottom:14, textTransform:"uppercase", letterSpacing:"0.06em" }}>Message Content</p>
-                      <div style={{ fontSize:14, color:"#cbd5e1", lineHeight:1.8, whiteSpace:"pre-wrap" }}>
-                        {e.body}
-                      </div>
-                    </div>
-
-                    {/* Footer meta */}
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:16, paddingTop:14, borderTop:"1px solid #1a1a2e" }}>
-                      <div style={{ display:"flex", gap:16, alignItems:"center" }}>
-                        <span style={{ fontSize:11, color:"#94a3b8" }}>Sent by <span style={{ color:"#cbd5e1" }}>{user?.email}</span></span>
-                        <span style={{ fontSize:11, color: e.status==="sent"?"#4ade80":"#f87171", display:"flex", alignItems:"center", gap:4 }}>
-                          <span style={{ width:6, height:6, borderRadius:"50%", background: e.status==="sent"?"#4ade80":"#f87171", display:"inline-block" }}></span>
-                          {e.status==="sent"?"Delivered":"Failed"}
+                    {/* Footer */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <span style={{ fontSize: 12, color: '#71717a' }}>
+                          Sent by <span style={{ color: '#d4d4d8' }}>{user?.email}</span>
                         </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor }} />
+                          <span style={{ fontSize: 12, color: statusColor, fontWeight: 500 }}>
+                            {email.status === 'sent' ? 'Delivered' : 'Failed'}
+                          </span>
+                        </div>
                       </div>
-                      <span style={{ fontSize:11, color:"#64748b" }}>{fmt(e.created_at)}</span>
+                      <span style={{ fontSize: 12, color: '#52525b' }}>{formatDate(email.created_at)}</span>
                     </div>
                   </div>
                 )}
@@ -287,11 +479,11 @@ function HistoryPage({ apiUrl, user }) {
           })}
         </div>
       )}
-    </main>
+    </div>
   );
-}
+};
 
-// ── Main App ────────────────────────────────────────────────────────
+// ── Main App ───────────────────────────────────────────────────────
 export default function App() {
   const [step, setStep] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -312,7 +504,6 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [page, setPage] = useState("app");
 
-  // Template builder state
   const [tb, setTb] = useState({ name:"", rawText:"", fields:[], aiPrompt:"" });
   const [tbParsed, setTbParsed] = useState(false);
 
@@ -320,6 +511,7 @@ export default function App() {
   const template = allTemplates.find(t => t.id === selectedTemplate);
   const defaultSubject = `Daily Update — ${new Date().toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })}`;
 
+  // Auth
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
@@ -343,67 +535,54 @@ export default function App() {
   }, [user]);
 
   const handleLogout = () => { localStorage.removeItem("dp_token"); setUser(null); };
-  const handleFieldChange = (key, val) => setFormData(prev => ({ ...prev, [key]: val }));
   const selectTemplate = (id) => { setSelectedTemplate(id); setFormData({}); setRefinedContent(""); setStep(2); };
 
   const tbParse = () => {
     const fields = parseTemplate(tb.rawText);
-    if (!fields.length) { alert("No fields detected. Each line needs a colon:\nField Name: placeholder text"); return; }
+    if (!fields.length) { alert("Each line must have: Field Name: placeholder"); return; }
     const vars = fields.map(f => `${f.label}: {{${f.key}}}`).join("\n");
-    const prompt = `Refine this ${tb.name||"update"} into a concise, professional format.\n\n${vars}`;
-    setTb(p => ({ ...p, fields, aiPrompt: prompt }));
+    setTb(p => ({ ...p, fields, aiPrompt: `Refine this ${tb.name||"update"} into a concise, professional format.\n\n${vars}` }));
     setTbParsed(true);
   };
-
-  const openAddTemplate = () => { setEditingTemplate(null); setTb({ name:"", rawText:"", fields:[], aiPrompt:"" }); setTbParsed(false); setShowTemplateBuilder(true); };
-  const openEditTemplate = (t) => { setEditingTemplate(t); setTb({ name:t.name, rawText:t.rawText||"", fields:t.fields, aiPrompt:t.aiPrompt }); setTbParsed(true); setShowTemplateBuilder(true); };
 
   const tbSave = async () => {
     if (!tb.name || !tb.fields.length) return;
     const token = localStorage.getItem("dp_token");
     try {
+      const url = editingTemplate ? `${API_URL}/templates/${editingTemplate.id}` : `${API_URL}/templates`;
+      const method = editingTemplate ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method, headers: { "Content-Type":"application/json", Authorization:`Bearer ${token}` },
+        body: JSON.stringify({ name:tb.name, raw_text:tb.rawText, fields:tb.fields, ai_prompt:tb.aiPrompt }),
+      });
+      const saved = await res.json();
       if (editingTemplate) {
-        const res = await fetch(`${API_URL}/templates/${editingTemplate.id}`, {
-          method: "PUT",
-          headers: { "Content-Type":"application/json", Authorization:`Bearer ${token}` },
-          body: JSON.stringify({ name:tb.name, raw_text:tb.rawText, fields:tb.fields, ai_prompt:tb.aiPrompt }),
-        });
-        const saved = await res.json();
         setCustomTemplates(prev => prev.map(t => t.id===editingTemplate.id ? { ...saved, aiPrompt:saved.ai_prompt } : t));
       } else {
-        const res = await fetch(`${API_URL}/templates`, {
-          method: "POST",
-          headers: { "Content-Type":"application/json", Authorization:`Bearer ${token}` },
-          body: JSON.stringify({ name:tb.name, raw_text:tb.rawText, fields:tb.fields, ai_prompt:tb.aiPrompt }),
-        });
-        const saved = await res.json();
         setCustomTemplates(prev => [...prev, { ...saved, aiPrompt:saved.ai_prompt }]);
       }
       setShowTemplateBuilder(false);
-      setEditingTemplate(null);
-      setTb({ name:"", rawText:"", fields:[], aiPrompt:"" });
-      setTbParsed(false);
     } catch { alert("Failed to save template"); }
   };
 
-  const deleteCustomTemplate = async (id) => {
-    if (!confirm("Delete this template? This action cannot be undone.")) return;
+  const deleteTemplate = async (id) => {
+    if (!confirm("Delete this template?")) return;
     const token = localStorage.getItem("dp_token");
     await fetch(`${API_URL}/templates/${id}`, { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
     setCustomTemplates(prev => prev.filter(t => t.id !== id));
     if (selectedTemplate === id) { setSelectedTemplate(null); setStep(1); }
   };
 
-  const refineWithGroq = async () => {
+  const refineContent = async () => {
     if (!formData[template.fields[0].key]) { setErrorMsg("Fill in at least the first field."); setStatus("error"); return; }
     setStatus("refining"); setErrorMsg("");
-    const token = localStorage.getItem("dp_token");
     try {
+      const token = localStorage.getItem("dp_token");
       const res = await fetch(`${API_URL}/refine`, {
         method:"POST", headers:{ "Content-Type":"application/json", Authorization:`Bearer ${token}` },
         body: JSON.stringify({ prompt: buildPrompt(template, formData) }),
       });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.detail||"Refine failed"); }
+      if (!res.ok) throw new Error((await res.json()).detail || "Refine failed");
       const data = await res.json();
       setRefinedContent(data.refined); setStatus("refined"); setStep(3);
     } catch(e) { setErrorMsg(e.message); setStatus("error"); }
@@ -412,13 +591,13 @@ export default function App() {
   const sendEmail = async () => {
     if (!toEmails.length) { setErrorMsg("Add at least one recipient."); setStatus("error"); return; }
     setStatus("sending"); setErrorMsg("");
-    const token = localStorage.getItem("dp_token");
     try {
+      const token = localStorage.getItem("dp_token");
       const res = await fetch(`${API_URL}/send`, {
         method:"POST", headers:{ "Content-Type":"application/json", Authorization:`Bearer ${token}` },
         body: JSON.stringify({ to:toEmails, cc:ccEmails, bcc:bccEmails, subject:subject||defaultSubject, body:refinedContent, template_name:template?.name||selectedTemplate }),
       });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.detail||"Send failed"); }
+      if (!res.ok) throw new Error((await res.json()).detail || "Send failed");
       setStatus("sent"); setStep(4);
     } catch(e) { setErrorMsg(e.message); setStatus("error"); }
   };
@@ -429,396 +608,641 @@ export default function App() {
     setSubject(""); setShowPreview(false); setShowCcBcc(false);
   };
 
-  const accent = "#6366f1";
-  const accentHover = "#818cf8";
-  const surface = "#13131f";
-  const border = "#1e2235";
-  const borderHover = "#2a2a42";
-
-  if (authLoading) return (
-    <div style={{ minHeight:"100vh", background:"#0d0d14", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Inter,sans-serif" }}>
-      <div style={{ textAlign:"center" }}>
-        <div style={{ width:32, height:32, border:"2px solid #1e2235", borderTopColor:"#6366f1", borderRadius:"50%", animation:"spin .7s linear infinite", margin:"0 auto 16px" }} />
-        <p style={{ color:"#94a3b8", fontSize:13 }}>Loading...</p>
-      </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
-
-  if (!user) return (
-    <div style={{ minHeight:"100vh", background:"#0d0d14", fontFamily:"Inter,sans-serif", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sora:wght@400;600&display=swap'); *{box-sizing:border-box;margin:0;padding:0}`}</style>
-      <div style={{ textAlign:"center", maxWidth:400 }}>
-        <div style={{ 
-          width:64, height:64, borderRadius:16, 
-          background: "linear-gradient(135deg, #6366f1, #8b5cf6)", 
-          display:"flex", alignItems:"center", justifyContent:"center", 
-          margin:"0 auto 24px", boxShadow:"0 8px 32px rgba(99,102,241,.25)"
-        }}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-            <polyline points="22,6 12,13 2,6"/>
-          </svg>
+  // ── Loading State ──────────────────────────────────────────────
+  if (authLoading) {
+    return (
+      <div style={{ ...styles.body, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <Spinner />
+          </div>
+          <p style={{ fontSize: 14, color: '#71717a' }}>Loading your workspace...</p>
         </div>
-        <h1 style={{ fontSize:30, fontFamily:"'Sora',sans-serif", fontWeight:600, color:"#e2e8f0", marginBottom:12, letterSpacing:"-0.02em" }}>Daily Push</h1>
-        <p style={{ fontSize:15, color:"#94a3b8", lineHeight:1.7, marginBottom:40 }}>Write your daily update, let AI refine it, send it from your Gmail — in under 2 minutes.</p>
-        <a href={`${API_URL}/auth/google`} style={{ 
-          display:"inline-flex", alignItems:"center", gap:12, background:"#fff", color:"#1a1a2e", 
-          padding:"13px 28px", borderRadius:10, fontSize:14, fontWeight:500, textDecoration:"none", 
-          boxShadow:"0 4px 20px rgba(0,0,0,.3)", transition:"all .2s"
-        }}
-        onMouseOver={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 24px rgba(0,0,0,.4)"; }}
-        onMouseOut={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,.3)"; }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
-            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-          </svg>
-          Continue with Google
-        </a>
-        <p style={{ fontSize:12, color:"#64748b", marginTop:20 }}>No password needed · Sends from your Gmail</p>
       </div>
-    </div>
-  );
+    );
+  }
 
+  // ── Login Screen ───────────────────────────────────────────────
+  if (!user) {
+    return (
+      <div style={{ ...styles.body, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ textAlign: 'center', maxWidth: 420 }}>
+          {/* Logo */}
+          <div style={{ 
+            width: 72, height: 72, borderRadius: 20,
+            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 32px',
+            boxShadow: '0 20px 60px rgba(99,102,241,0.3)',
+          }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </div>
+          
+          <h1 style={{ fontSize: 36, fontWeight: 700, color: '#fafafa', marginBottom: 12, letterSpacing: '-0.03em' }}>
+            Daily Push
+          </h1>
+          <p style={{ fontSize: 16, color: '#a1a1aa', lineHeight: 1.7, marginBottom: 48 }}>
+            AI-powered daily updates. Write, refine, and send professional updates from your Gmail in seconds.
+          </p>
+          
+          <a 
+            href={`${API_URL}/auth/google`}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 12,
+              background: '#fff', color: '#18181b',
+              padding: '14px 32px', borderRadius: 14,
+              fontSize: 15, fontWeight: 600, textDecoration: 'none',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(0,0,0,0.4)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(0,0,0,0.3)'; }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Continue with Google
+          </a>
+          <p style={{ fontSize: 13, color: '#52525b', marginTop: 24 }}>
+            No password needed · Sends directly from your Gmail
+          </p>
+        </div>
+        
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { background: #09090b; }
+          @keyframes spin { to { transform: rotate(360deg); } }
+          @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+          @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+          .animate-fade-in { animation: fadeIn 0.4s ease forwards; }
+          ::-webkit-scrollbar { width: 6px; }
+          ::-webkit-scrollbar-track { background: transparent; }
+          ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+          ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        `}</style>
+      </div>
+    );
+  }
+
+  // ── Main App ───────────────────────────────────────────────────
   return (
-    <div style={{ minHeight:"100vh", background:"#0d0d14", fontFamily:"'Inter',sans-serif", color:"#e2e8f0" }}>
+    <div style={styles.body}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Sora:wght@300;400;600&display=swap');
-        *{box-sizing:border-box;margin:0;padding:0}
-        ::-webkit-scrollbar{width:5px} ::-webkit-scrollbar-track{background:#13131f} ::-webkit-scrollbar-thumb{background:#2a2a3d;border-radius:3px}
-        textarea,input,select{font-family:'Inter',sans-serif!important}
-        .fade-in{animation:fadeIn .35s ease forwards}
-        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-        .pulse{animation:pulse 1.5s infinite}
-        .btn-primary{background:${accent};color:#fff;border:none;padding:11px 24px;font-family:'Inter',sans-serif;font-size:14px;font-weight:500;cursor:pointer;border-radius:10px;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
-        .btn-primary:hover{background:${accentHover};transform:translateY(-1px);box-shadow:0 4px 20px rgba(99,102,241,.35)}
-        .btn-primary:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
-        .btn-ghost{background:transparent;color:#cbd5e1;border:1px solid ${border};padding:10px 20px;font-family:'Inter',sans-serif;font-size:13px;cursor:pointer;border-radius:10px;transition:all .2s}
-        .btn-ghost:hover{border-color:${accent};color:#a5b4fc;background:rgba(99,102,241,.06)}
-        .btn-outline-accent{background:rgba(99,102,241,.06);color:#a5b4fc;border:1px solid #3730a3;padding:9px 16px;font-family:'Inter',sans-serif;font-size:13px;cursor:pointer;border-radius:10px;transition:all .2s}
-        .btn-outline-accent:hover{background:rgba(99,102,241,.12);border-color:${accent}}
-        .input-field{width:100%;background:${surface};border:1.5px solid ${border};color:#e2e8f0;padding:12px 16px;border-radius:10px;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s}
-        .input-field:focus{border-color:${accent};box-shadow:0 0 0 3px rgba(99,102,241,.1)}
-        .input-field::placeholder{color:#2a2d40}
-        textarea.input-field{resize:vertical;line-height:1.75}
-        .tpl-card{background:${surface};border:1.5px solid #1a1a2e;border-radius:12px;padding:20px;cursor:pointer;transition:all .2s;position:relative}
-        .tpl-card:hover{border-color:#4338ca;background:#161625;transform:translateY(-1px);box-shadow:0 4px 20px rgba(99,102,241,.08)}
-        .step-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;transition:all .3s}
-        .section-label{font-size:11px;color:#64748b;letter-spacing:.08em;font-weight:500;text-transform:uppercase}
-        .tag{background:#1a1a2e;border:1px solid #252540;border-radius:5px;padding:3px 10px;font-size:12px;color:#94a3b8}
-        .error-box{padding:12px 16px;background:#1a0808;border:1px solid #3a1010;border-radius:10px}
-        .panel{position:fixed;top:0;right:0;height:100vh;width:440px;background:#0f0f1a;border-left:1px solid #1a1a2e;padding:32px;z-index:100;overflow-y:auto;transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 32px rgba(0,0,0,.3)}
-        .panel.open{transform:translateX(0)}
-        .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99;opacity:0;pointer-events:none;transition:opacity .3s;backdrop-filter:blur(2px)}
-        .overlay.open{opacity:1;pointer-events:all}
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #09090b; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease forwards; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        input::placeholder, textarea::placeholder { color: #52525b; }
       `}</style>
 
-      {/* Overlay */}
-      <div className={`overlay ${showTemplateBuilder?"open":""}`} onClick={() => setShowTemplateBuilder(false)} />
-
       {/* Header */}
-      <header style={{ borderBottom:"1px solid #131320", padding:"14px 28px", display:"flex", alignItems:"center", justifyContent:"space-between", background:"#0d0d14", position:"sticky", top:0, zIndex:10 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ width:8, height:8, background:"#6366f1", borderRadius:"50%", boxShadow:"0 0 8px rgba(99,102,241,.6)" }} />
-          <span style={{ fontSize:14, fontFamily:"'Sora',sans-serif", fontWeight:600, color:"#c7d2fe", letterSpacing:".04em" }}>Daily Push</span>
+      <header style={{
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        padding: '16px 32px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: 'rgba(9,9,11,0.8)', backdropFilter: 'blur(20px)',
+        position: 'sticky', top: 0, zIndex: 100,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 10,
+            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <span style={{ fontSize: 16, fontWeight: 600, color: '#fafafa', letterSpacing: '-0.02em' }}>Daily Push</span>
         </div>
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          <span style={{ fontSize:12, color:"#94a3b8" }}>{new Date().toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short"})}</span>
-          <button className="btn-ghost" onClick={() => setPage(page==="history"?"app":"history")} style={{ padding:"6px 14px", fontSize:12 }}>
-            {page==="history"?"← Compose":"History"}
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <button
+            onClick={() => setPage(page === 'history' ? 'app' : 'history')}
+            style={{
+              ...styles.buttonSecondary, padding: '8px 16px', fontSize: 13,
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+          >
+            {page === 'history' ? '← Compose' : 'History'}
           </button>
-          <div style={{ display:"flex", alignItems:"center", gap:8, background:"#13131f", border:"1px solid #1e2235", borderRadius:8, padding:"5px 12px" }}>
-            {user.picture && <img src={user.picture} width={20} height={20} style={{ borderRadius:"50%" }} alt="" />}
-            <span style={{ fontSize:12, color:"#cbd5e1" }}>{user.name?.split(" ")[0]}</span>
-            <button onClick={handleLogout} style={{ background:"none", border:"none", color:"#94a3b8", cursor:"pointer", fontSize:11 }}>Sign out</button>
+          
+          <div style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.08)' }} />
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {user.picture && <img src={user.picture} alt="" style={{ width: 28, height: 28, borderRadius: 8 }} />}
+            <div>
+              <div style={{ fontSize: 13, color: '#d4d4d8', fontWeight: 500 }}>{user.name?.split(' ')[0]}</div>
+              <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#52525b', fontSize: 11, cursor: 'pointer', padding: 0 }}>
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Template Builder Panel */}
-      <div className={`panel ${showTemplateBuilder?"open":""}`}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:28 }}>
-          <span style={{ fontSize:16, fontFamily:"'Sora',sans-serif", fontWeight:600, color:"#a5b4fc" }}>{editingTemplate?"Edit Template":"New Template"}</span>
-          <button className="btn-ghost" onClick={() => setShowTemplateBuilder(false)} style={{ padding:"4px 10px", fontSize:13 }}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </button>
-        </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-          <div>
-            <label style={{ fontSize:11, color:"#94a3b8", fontWeight:600, display:"block", marginBottom:8, textTransform:"uppercase", letterSpacing:"0.05em" }}>Template Name *</label>
-            <input className="input-field" placeholder="e.g. Weekly Review" value={tb.name} onChange={e=>setTb(p=>({...p,name:e.target.value}))} />
-          </div>
-          <div>
-            <label style={{ fontSize:11, color:"#94a3b8", fontWeight:600, display:"block", marginBottom:8, textTransform:"uppercase", letterSpacing:"0.05em" }}>Template Structure *</label>
-            <p style={{ fontSize:11, color:"#64748b", marginBottom:8, lineHeight:1.6 }}>Define fields — one per line as <span style={{ color:"#a5b4fc", background:"rgba(99,102,241,.1)", padding:"1px 4px", borderRadius:3, fontFamily:"monospace" }}>Field Name: placeholder</span></p>
-            <textarea className="input-field" placeholder={"Accomplishments: What you achieved today\nBlockers: Any issues or delays\nNext Steps: What you'll work on next"} value={tb.rawText}
-              onChange={e=>{setTb(p=>({...p,rawText:e.target.value}));setTbParsed(false);}} rows={8} style={{ fontSize:13, lineHeight:1.8 }} />
-            <button className="btn-outline-accent" onClick={tbParse} disabled={!tb.rawText.trim()} style={{ marginTop:8, width:"100%", justifyContent:"center", display:"flex" }}>
-              Detect Fields
-            </button>
-          </div>
-
-          {tbParsed && tb.fields.length > 0 && (
-            <div>
-              <label style={{ fontSize:11, color:"#4ade80", fontWeight:600, display:"block", marginBottom:10, textTransform:"uppercase", letterSpacing:"0.05em" }}>✓ {tb.fields.length} field{tb.fields.length !== 1 ? 's' : ''} detected</label>
-              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                {tb.fields.map((f,i)=>(
-                  <div key={i} style={{ background:"#13131f", border:"1px solid #1e2235", borderRadius:8, padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <span style={{ fontSize:13, color:"#c7d2fe" }}>{f.label}</span>
-                    <span style={{ fontSize:11, color:"#64748b", fontFamily:"monospace" }}>{`{{${f.key}}}`}</span>
-                  </div>
-                ))}
+      {/* Template Builder Modal */}
+      {showTemplateBuilder && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', zIndex: 200 }}
+            onClick={() => setShowTemplateBuilder(false)} />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            width: '100%', maxWidth: 520, maxHeight: '85vh', overflowY: 'auto',
+            background: '#18181b', border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 24, padding: 32, zIndex: 201,
+            boxShadow: '0 40px 80px rgba(0,0,0,0.6)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 600, color: '#fafafa' }}>
+                {editingTemplate ? 'Edit Template' : 'New Template'}
+              </h2>
+              <button onClick={() => setShowTemplateBuilder(false)} style={{
+                width: 36, height: 36, borderRadius: 10,
+                background: 'transparent', border: '1px solid rgba(255,255,255,0.08)',
+                color: '#71717a', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div>
+                <label style={{ fontSize: 12, color: '#a1a1aa', fontWeight: 600, display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Template Name *
+                </label>
+                <input style={styles.input} placeholder="e.g. Weekly Review"
+                  value={tb.name} onChange={e => setTb(p => ({...p, name: e.target.value}))} />
               </div>
+              
+              <div>
+                <label style={{ fontSize: 12, color: '#a1a1aa', fontWeight: 600, display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Fields *
+                </label>
+                <textarea style={{...styles.input, resize: 'vertical', lineHeight: 1.8}}
+                  placeholder="Accomplishments: What you achieved today&#10;Blockers: Any issues or delays&#10;Next Steps: What you'll work on next"
+                  value={tb.rawText} onChange={e => { setTb(p => ({...p, rawText: e.target.value})); setTbParsed(false); }}
+                  rows={7} />
+                <button onClick={tbParse} disabled={!tb.rawText.trim()} style={{
+                  ...styles.buttonSecondary, marginTop: 12, width: '100%', justifyContent: 'center',
+                  opacity: tb.rawText.trim() ? 1 : 0.5,
+                }}>
+                  Parse Fields
+                </button>
+              </div>
+              
+              {tbParsed && tb.fields.length > 0 && (
+                <div>
+                  <label style={{ fontSize: 12, color: '#22c55e', fontWeight: 600, display: 'block', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    ✓ {tb.fields.length} field{tb.fields.length !== 1 ? 's' : ''} detected
+                  </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {tb.fields.map((f, i) => (
+                      <div key={i} style={{ ...styles.glass, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 13, color: '#d4d4d8' }}>{f.label}</span>
+                        <code style={{ fontSize: 11, color: '#71717a' }}>{`{{${f.key}}}`}</code>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {tbParsed && (
+                <div>
+                  <label style={{ fontSize: 12, color: '#a1a1aa', fontWeight: 600, display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    AI Prompt
+                  </label>
+                  <textarea style={{...styles.input, resize: 'vertical'}}
+                    value={tb.aiPrompt} onChange={e => setTb(p => ({...p, aiPrompt: e.target.value}))}
+                    rows={5} />
+                </div>
+              )}
+              
+              <button onClick={tbSave} disabled={!tb.name || !tbParsed} style={{
+                ...styles.buttonPrimary, width: '100%', justifyContent: 'center',
+                opacity: (!tb.name || !tbParsed) ? 0.5 : 1, marginTop: 8,
+              }}>
+                {editingTemplate ? 'Save Changes' : 'Create Template'}
+              </button>
             </div>
-          )}
-
-          {tbParsed && (
-            <div>
-              <label style={{ fontSize:11, color:"#94a3b8", fontWeight:600, display:"block", marginBottom:8, textTransform:"uppercase", letterSpacing:"0.05em" }}>AI Prompt (editable)</label>
-              <textarea className="input-field" value={tb.aiPrompt} onChange={e=>setTb(p=>({...p,aiPrompt:e.target.value}))} rows={5} style={{ fontSize:12 }} />
-            </div>
-          )}
-
-          <button className="btn-primary" onClick={tbSave} disabled={!tb.name||!tbParsed||!tb.fields.length} style={{ width:"100%", justifyContent:"center", marginTop:8 }}>
-            {editingTemplate?"Save Changes":"Create Template"}
-          </button>
-        </div>
-      </div>
+          </div>
+        </>
+      )}
 
       {/* Preview Modal */}
       {showPreview && (
-        <div style={{ position:"fixed", inset:0, zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,.85)", padding:24, backdropFilter:"blur(4px)" }}
-          onClick={()=>setShowPreview(false)}>
-          <div style={{ background:"#fff", borderRadius:14, width:"100%", maxWidth:560, maxHeight:"82vh", overflowY:"auto", boxShadow:"0 24px 80px rgba(0,0,0,.5)" }} onClick={e=>e.stopPropagation()}>
-            <div style={{ background:"#f8fafc", borderRadius:"14px 14px 0 0", padding:"18px 24px", borderBottom:"1px solid #e2e8f0" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                <span style={{ fontSize:11, color:"#64748b", letterSpacing:".06em", textTransform:"uppercase", fontWeight:500 }}>Email Preview</span>
-                <button onClick={()=>setShowPreview(false)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color:"#64748b" }}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)', padding: 24 }}
+          onClick={() => setShowPreview(false)}>
+          <div style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 560, maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 40px 80px rgba(0,0,0,0.5)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ background: '#fafafa', borderRadius: '20px 20px 0 0', padding: '20px 28px', borderBottom: '1px solid #e4e4e7' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <span style={{ fontSize: 12, color: '#71717a', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Preview</span>
+                <button onClick={() => setShowPreview(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a1a1aa' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
               </div>
-              {[["From", user?.email||"your@gmail.com"],["To",toEmails.join(", ")||"—"],ccEmails.length?["CC",ccEmails.join(", ")]:null,bccEmails.length?["BCC",bccEmails.join(", ")]:null,["Subject",subject||defaultSubject]].filter(Boolean).map(([k,v])=>(
-                <div key={k} style={{ display:"flex", gap:10, marginBottom:4, fontSize:13 }}>
-                  <span style={{ color:"#94a3b8", minWidth:60 }}>{k}:</span>
-                  <span style={{ color:"#1e293b", fontWeight:k==="Subject"?600:400 }}>{v}</span>
+              {[['From', user?.email], ['To', toEmails.join(', ') || '—'], ccEmails.length ? ['CC', ccEmails.join(', ')] : null, bccEmails.length ? ['BCC', bccEmails.join(', ')] : null, ['Subject', subject || defaultSubject]].filter(Boolean).map(([k, v]) => (
+                <div key={k} style={{ display: 'flex', gap: 12, marginBottom: 6, fontSize: 13 }}>
+                  <span style={{ color: '#a1a1aa', minWidth: 60 }}>{k}:</span>
+                  <span style={{ color: '#18181b', fontWeight: k === 'Subject' ? 600 : 400 }}>{v}</span>
                 </div>
               ))}
             </div>
-            <div style={{ padding:"28px 24px" }}>
-              <p style={{ fontSize:14, color:"#1e293b", lineHeight:1.85, whiteSpace:"pre-wrap" }}>{refinedContent||"(No content yet)"}</p>
-              <div style={{ marginTop:32, paddingTop:16, borderTop:"1px solid #f1f5f9" }}>
-                <p style={{ fontSize:11, color:"#94a3b8" }}>Sent via Daily Push · {new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"})}</p>
+            <div style={{ padding: '28px' }}>
+              <div style={{ fontSize: 14, color: '#3f3f46', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                {refinedContent || '(No content)'}
+              </div>
+              <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid #e4e4e7' }}>
+                <p style={{ fontSize: 12, color: '#a1a1aa' }}>Sent via Daily Push · {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* History */}
-      {page === "history" && <HistoryPage apiUrl={API_URL} user={user} />}
+      {/* History Page */}
+      {page === 'history' && <HistoryPage apiUrl={API_URL} user={user} />}
 
-      {/* App */}
-      {page === "app" && (
-        <main style={{ maxWidth:640, margin:"0 auto", padding:"48px 24px" }}>
-
-          {/* Steps */}
-          <div style={{ display:"flex", alignItems:"center", marginBottom:48 }}>
-            {["Template","Compose","Review","Done"].map((label,i)=>{
-              const n=i+1, active=step===n, done=step>n;
+      {/* Main App */}
+      {page === 'app' && (
+        <div style={{ maxWidth: 680, margin: '0 auto', padding: '60px 24px' }}>
+          
+          {/* Progress Steps */}
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 56 }}>
+            {['Template', 'Compose', 'Review', 'Done'].map((label, i) => {
+              const n = i + 1, active = step === n, done = step > n;
               return (
-                <div key={n} style={{ display:"flex", alignItems:"center", flex:i<3?1:"none" }}>
-                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
-                    <div className="step-dot" style={{ 
-                      background:done||active?accent:surface, 
-                      color:done||active?"#fff":"#2a2d40", 
-                      border:active||done?"none":`1.5px solid ${border}`, 
-                      boxShadow:active?`0 0 0 4px rgba(99,102,241,.15)`:done?"none":"none" 
+                <div key={n} style={{ display: 'flex', alignItems: 'center', flex: i < 3 ? 1 : 'none' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 12,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 13, fontWeight: 600,
+                      background: done ? '#6366f1' : active ? '#6366f1' : 'rgba(255,255,255,0.03)',
+                      border: !done && !active ? '1px solid rgba(255,255,255,0.08)' : 'none',
+                      color: done || active ? '#fff' : '#52525b',
+                      transition: 'all 0.3s ease',
+                      boxShadow: active ? '0 0 0 8px rgba(99,102,241,0.15)' : 'none',
                     }}>
-                      {done?(
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                      ):n}
+                      {done ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                      ) : n}
                     </div>
-                    <span style={{ fontSize:10, color:active?"#a5b4fc":done?"#6366f1":"#2a2d40", fontWeight:active?500:400, textTransform:"uppercase", letterSpacing:"0.05em" }}>{label}</span>
+                    <span style={{ fontSize: 10, color: active ? '#a5b4fc' : done ? '#6366f1' : '#52525b', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {label}
+                    </span>
                   </div>
-                  {i<3 && <div style={{ flex:1, height:1.5, background:done?accent:"#1a1a2e", margin:"0 8px", marginBottom:22, borderRadius:1, transition:"background .4s" }} />}
+                  {i < 3 && (
+                    <div style={{
+                      flex: 1, height: 2, margin: '0 12px', marginBottom: 24,
+                      background: done ? '#6366f1' : 'rgba(255,255,255,0.06)',
+                      borderRadius: 1, transition: 'background 0.5s ease',
+                    }} />
+                  )}
                 </div>
               );
             })}
           </div>
 
-          {/* STEP 1 */}
+          {/* STEP 1: Template Selection */}
           {step === 1 && (
-            <div className="fade-in">
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:32 }}>
+            <div className="animate-fade-in">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 36 }}>
                 <div>
-                  <h1 style={{ fontSize:24, fontWeight:600, fontFamily:"'Sora',sans-serif", color:"#e2e8f0", marginBottom:6 }}>Choose a template</h1>
-                  <p style={{ fontSize:14, color:"#94a3b8" }}>Select a format for your update</p>
+                  <h1 style={{ fontSize: 32, fontWeight: 600, color: '#fafafa', marginBottom: 8, letterSpacing: '-0.02em' }}>
+                    Choose a template
+                  </h1>
+                  <p style={{ fontSize: 15, color: '#71717a' }}>
+                    Select a format that fits your update style
+                  </p>
                 </div>
-                <button className="btn-outline-accent" onClick={openAddTemplate}>+ New Template</button>
+                <button onClick={() => { setEditingTemplate(null); setTb({ name:"", rawText:"", fields:[], aiPrompt:"" }); setTbParsed(false); setShowTemplateBuilder(true); }}
+                  style={styles.buttonSecondary}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  New Template
+                </button>
               </div>
 
-              <p className="section-label" style={{ marginBottom:12 }}>Default Templates</p>
-              <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:32 }}>
-                {DEFAULT_TEMPLATES.map(t => (
-                  <div key={t.id} className="tpl-card" onClick={() => selectTemplate(t.id)}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                      <div style={{ flex:1 }}>
-                        <p style={{ fontSize:14, fontFamily:"'Sora',sans-serif", fontWeight:500, color:"#e2e8f0", marginBottom:10 }}>{t.name}</p>
-                        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                          {t.fields.map(f=><span key={f.key} className="tag">{f.label}</span>)}
-                        </div>
+              {/* Default Templates */}
+              <div style={{ marginBottom: 40 }}>
+                <p style={{ fontSize: 11, color: '#52525b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>
+                  Default Templates
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+                  {DEFAULT_TEMPLATES.map(t => (
+                    <div key={t.id} onClick={() => selectTemplate(t.id)} style={{
+                      ...styles.glass, padding: '20px 24px', cursor: 'pointer',
+                      transition: 'all 0.3s ease', position: 'relative',
+                      borderLeft: `3px solid ${t.color}`,
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.3)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                    >
+                      <h3 style={{ fontSize: 15, fontWeight: 600, color: '#fafafa', marginBottom: 12 }}>
+                        {t.name}
+                      </h3>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {t.fields.map(f => (
+                          <span key={f.key} style={styles.tag}>{f.label}</span>
+                        ))}
                       </div>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3a3a58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft:12, flexShrink:0 }}>
-                        <polyline points="9 18 15 12 9 6"/>
-                      </svg>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
 
+              {/* Custom Templates */}
               {customTemplates.length > 0 && (
-                <>
-                  <p className="section-label" style={{ marginBottom:12 }}>Your Templates</p>
-                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                <div>
+                  <p style={{ fontSize: 11, color: '#52525b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>
+                    Your Templates
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
                     {customTemplates.map(t => (
-                      <div key={t.id} className="tpl-card" onClick={() => selectTemplate(t.id)}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-                              <p style={{ fontSize:14, fontFamily:"'Sora',sans-serif", fontWeight:500, color:"#e2e8f0" }}>{t.name}</p>
-                              <span style={{ fontSize:10, color:"#a5b4fc", background:"rgba(99,102,241,.1)", border:"1px solid rgba(99,102,241,.2)", borderRadius:4, padding:"1px 6px", textTransform:"uppercase", letterSpacing:"0.05em" }}>Custom</span>
+                      <div key={t.id} onClick={() => selectTemplate(t.id)} style={{
+                        ...styles.glass, padding: '20px 24px', cursor: 'pointer',
+                        transition: 'all 0.3s ease', position: 'relative',
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                              <h3 style={{ fontSize: 15, fontWeight: 600, color: '#fafafa' }}>{t.name}</h3>
+                              <span style={{ fontSize: 10, color: '#a5b4fc', background: 'rgba(99,102,241,0.15)', padding: '2px 8px', borderRadius: 4 }}>
+                                Custom
+                              </span>
                             </div>
-                            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                              {t.fields.map(f=><span key={f.key} className="tag">{f.label}</span>)}
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              {t.fields.map(f => (
+                                <span key={f.key} style={styles.tag}>{f.label}</span>
+                              ))}
                             </div>
                           </div>
-                          <div style={{ display:"flex", alignItems:"center", gap:8, marginLeft:12 }} onClick={e=>e.stopPropagation()}>
-                            <ThreeDotMenu onEdit={() => openEditTemplate(t)} onDelete={() => deleteCustomTemplate(t.id)} />
+                          <div onClick={e => e.stopPropagation()}>
+                            <MenuDots onEdit={() => { setEditingTemplate(t); setTb({ name:t.name, rawText:t.rawText||"", fields:t.fields, aiPrompt:t.aiPrompt }); setTbParsed(true); setShowTemplateBuilder(true); }}
+                              onDelete={() => deleteTemplate(t.id)} />
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                </>
+                </div>
               )}
             </div>
           )}
 
-          {/* STEP 2 */}
+          {/* STEP 2: Compose */}
           {step === 2 && template && (
-            <div className="fade-in">
-              <div style={{ marginBottom:32 }}>
-                <h1 style={{ fontSize:24, fontWeight:600, fontFamily:"'Sora',sans-serif", color:"#e2e8f0", marginBottom:6 }}>{template.name}</h1>
-                <p style={{ fontSize:14, color:"#94a3b8" }}>Fill in your update — AI will polish it</p>
+            <div className="animate-fade-in">
+              <div style={{ marginBottom: 36 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: template.color || '#6366f1' }} />
+                  <h1 style={{ fontSize: 28, fontWeight: 600, color: '#fafafa', letterSpacing: '-0.02em' }}>
+                    {template.name}
+                  </h1>
+                </div>
+                <p style={{ fontSize: 15, color: '#71717a' }}>
+                  Write naturally — AI will polish and structure your update
+                </p>
               </div>
-              <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-                {template.fields.map((f,idx)=>(
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                {template.fields.map((f, idx) => (
                   <div key={f.key}>
-                    <label style={{ fontSize:11, color:"#cbd5e1", fontWeight:600, display:"block", marginBottom:8, textTransform:"uppercase", letterSpacing:"0.05em" }}>
-                      {f.label}{idx===0&&<span style={{ color:"#6366f1" }}> *</span>}
+                    <label style={{
+                      fontSize: 12, color: '#a1a1aa', fontWeight: 600,
+                      display: 'block', marginBottom: 10,
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                    }}>
+                      {f.label}
+                      {idx === 0 && <span style={{ color: '#6366f1', marginLeft: 4 }}>*</span>}
                     </label>
-                    <textarea className="input-field" placeholder={f.placeholder} value={formData[f.key]||""} onChange={e=>handleFieldChange(f.key,e.target.value)} rows={4} />
+                    <textarea
+                      style={{ ...styles.input, resize: 'vertical', lineHeight: 1.8 }}
+                      placeholder={f.placeholder}
+                      value={formData[f.key] || ''}
+                      onChange={e => { setFormData(prev => ({ ...prev, [f.key]: e.target.value })); }}
+                      rows={4}
+                      onFocus={e => { e.currentTarget.style.border = '1px solid rgba(99,102,241,0.5)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
+                      onBlur={e => { e.currentTarget.style.border = '1px solid rgba(255,255,255,0.08)'; e.currentTarget.style.boxShadow = 'none'; }}
+                    />
                   </div>
                 ))}
               </div>
-              {status==="error" && <div className="error-box" style={{ marginTop:16 }}><p style={{ fontSize:13, color:"#f87171" }}>{errorMsg}</p></div>}
-              <div style={{ marginTop:32, display:"flex", justifyContent:"space-between", paddingTop:20, borderTop:"1px solid #1a1a2e" }}>
-                <button className="btn-ghost" onClick={()=>{setStep(1);setStatus(null);}}>← Back</button>
-                <button className="btn-primary" disabled={!formData[template.fields[0].key]||status==="refining"} onClick={refineWithGroq}>
-                  {status==="refining"?<><span style={{ width:16, height:16, border:"2px solid rgba(255,255,255,.3)", borderTopColor:"#fff", borderRadius:"50%", animation:"spin .7s linear infinite", display:"inline-block" }}></span> Refining...</>:"Refine with AI →"}
+
+              {status === 'error' && (
+                <div style={{
+                  marginTop: 20, padding: '14px 18px',
+                  background: 'rgba(239,68,68,0.1)',
+                  border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12,
+                  color: '#fca5a5', fontSize: 13,
+                }}>
+                  {errorMsg}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 36, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <button onClick={() => { setStep(1); setStatus(null); }} style={styles.buttonSecondary}>
+                  ← Back
+                </button>
+                <button
+                  onClick={refineContent}
+                  disabled={!formData[template.fields[0].key] || status === 'refining'}
+                  style={{
+                    ...styles.buttonPrimary,
+                    opacity: (!formData[template.fields[0].key] || status === 'refining') ? 0.5 : 1,
+                  }}
+                  onMouseEnter={e => { if (!(!formData[template.fields[0].key] || status === 'refining')) { e.currentTarget.style.background = '#5558e6'; e.currentTarget.style.transform = 'translateY(-1px)'; }}}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#6366f1'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                >
+                  {status === 'refining' ? (
+                    <><Spinner /> Refining...</>
+                  ) : (
+                    <>Refine with AI <span style={{ fontSize: 18, lineHeight: 1 }}>→</span></>
+                  )}
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 3 */}
+          {/* STEP 3: Review & Send */}
           {step === 3 && (
-            <div className="fade-in">
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:28 }}>
+            <div className="animate-fade-in">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
                 <div>
-                  <h1 style={{ fontSize:24, fontWeight:600, fontFamily:"'Sora',sans-serif", color:"#e2e8f0", marginBottom:6 }}>Review & Send</h1>
-                  <p style={{ fontSize:14, color:"#94a3b8" }}>Edit if needed, then send your update</p>
+                  <h1 style={{ fontSize: 28, fontWeight: 600, color: '#fafafa', marginBottom: 8, letterSpacing: '-0.02em' }}>
+                    Review & Send
+                  </h1>
+                  <p style={{ fontSize: 15, color: '#71717a' }}>
+                    Final check before delivering your update
+                  </p>
                 </div>
-                <button className="btn-outline-accent" onClick={()=>setShowPreview(true)}>Preview</button>
-              </div>
-
-              <div style={{ marginBottom:24 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                  <label style={{ fontSize:11, color:"#cbd5e1", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em" }}>Refined Update</label>
-                  <span style={{ fontSize:11, color:"#64748b" }}>{refinedContent.length} characters</span>
-                </div>
-                <textarea className="input-field" value={refinedContent} onChange={e=>setRefinedContent(e.target.value)} rows={8} style={{ lineHeight:1.8, fontSize:14 }} />
-              </div>
-
-              <div style={{ display:"flex", flexDirection:"column", gap:16, marginBottom:20 }}>
-                <EmailChipInput label={<>To <span style={{ color:"#6366f1" }}>*</span></>} chips={toEmails} onChange={setToEmails} placeholder="Add recipient emails..." />
-                <button className="btn-ghost" onClick={()=>setShowCcBcc(!showCcBcc)} style={{ fontSize:12, padding:"5px 12px", alignSelf:"flex-start", display:"flex", alignItems:"center", gap:4 }}>
-                  <span style={{ transition:"transform .2s", transform: showCcBcc?"rotate(90deg)":"rotate(0deg)", display:"inline-block" }}>›</span>
-                  {showCcBcc?"Hide CC / BCC":"Add CC / BCC"}
+                <button onClick={() => setShowPreview(true)} style={styles.buttonSecondary}>
+                  Preview
                 </button>
-                {showCcBcc && <>
-                  <EmailChipInput label="CC" chips={ccEmails} onChange={setCcEmails} placeholder="CC emails..." />
-                  <EmailChipInput label="BCC" chips={bccEmails} onChange={setBccEmails} placeholder="BCC emails..." />
-                </>}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
-                  <label style={{ fontSize:11, color:"#cbd5e1", fontWeight:600, display:"block", marginBottom:8, textTransform:"uppercase", letterSpacing:"0.05em" }}>Subject</label>
-                  <input className="input-field" placeholder={defaultSubject} value={subject} onChange={e=>setSubject(e.target.value)} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <label style={{ fontSize: 12, color: '#a1a1aa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Refined Content
+                    </label>
+                    <span style={{ fontSize: 12, color: '#52525b' }}>{refinedContent.length} chars</span>
+                  </div>
+                  <textarea
+                    style={{ ...styles.input, resize: 'vertical', lineHeight: 1.8, minHeight: 160 }}
+                    value={refinedContent}
+                    onChange={e => setRefinedContent(e.target.value)}
+                    rows={8}
+                    onFocus={e => { e.currentTarget.style.border = '1px solid rgba(99,102,241,0.5)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
+                    onBlur={e => { e.currentTarget.style.border = '1px solid rgba(255,255,255,0.08)'; e.currentTarget.style.boxShadow = 'none'; }}
+                  />
+                </div>
+
+                <EmailInput
+                  label={<>To Recipients <span style={{ color: '#6366f1' }}>*</span></>}
+                  chips={toEmails}
+                  onChange={setToEmails}
+                  placeholder="colleague@company.com"
+                />
+
+                <button
+                  onClick={() => setShowCcBcc(!showCcBcc)}
+                  style={{
+                    background: 'none', border: 'none', color: '#71717a', fontSize: 13,
+                    cursor: 'pointer', alignSelf: 'flex-start', padding: 0,
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = '#a1a1aa'}
+                  onMouseLeave={e => e.currentTarget.style.color = '#71717a'}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    style={{ transform: showCcBcc ? 'rotate(45deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  {showCcBcc ? 'Hide CC / BCC' : 'Add CC / BCC'}
+                </button>
+
+                {showCcBcc && (
+                  <>
+                    <EmailInput label="CC" chips={ccEmails} onChange={setCcEmails} placeholder="manager@company.com" />
+                    <EmailInput label="BCC" chips={bccEmails} onChange={setBccEmails} placeholder="bcc@company.com" />
+                  </>
+                )}
+
+                <div>
+                  <label style={{ fontSize: 12, color: '#a1a1aa', fontWeight: 600, display: 'block', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Subject Line
+                  </label>
+                  <input
+                    style={styles.input}
+                    placeholder={defaultSubject}
+                    value={subject}
+                    onChange={e => setSubject(e.target.value)}
+                    onFocus={e => { e.currentTarget.style.border = '1px solid rgba(99,102,241,0.5)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
+                    onBlur={e => { e.currentTarget.style.border = '1px solid rgba(255,255,255,0.08)'; e.currentTarget.style.boxShadow = 'none'; }}
+                  />
                 </div>
               </div>
 
-              {status==="error" && <div className="error-box" style={{ marginBottom:16 }}><p style={{ fontSize:13, color:"#f87171" }}>{errorMsg}</p></div>}
-
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:20, borderTop:"1px solid #1a1a2e" }}>
-                <button className="btn-ghost" onClick={()=>{setStep(2);setStatus("refined");}}>← Back</button>
-                <div style={{ display:"flex", gap:8 }}>
-                  <button className="btn-ghost" onClick={()=>setShowPreview(true)} style={{ fontSize:13 }}>Preview</button>
-                  <button className="btn-primary" disabled={!toEmails.length||status==="sending"} onClick={sendEmail}>
-                    {status==="sending"?<><span style={{ width:16, height:16, border:"2px solid rgba(255,255,255,.3)", borderTopColor:"#fff", borderRadius:"50%", animation:"spin .7s linear infinite", display:"inline-block" }}></span> Sending...</>:`Send to ${toEmails.length} ${toEmails.length===1?"recipient":"recipients"} →`}
-                  </button>
+              {status === 'error' && (
+                <div style={{
+                  marginTop: 20, padding: '14px 18px',
+                  background: 'rgba(239,68,68,0.1)',
+                  border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12,
+                  color: '#fca5a5', fontSize: 13,
+                }}>
+                  {errorMsg}
                 </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 36, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <button onClick={() => { setStep(2); setStatus('refined'); }} style={styles.buttonSecondary}>
+                  ← Back
+                </button>
+                <button
+                  onClick={sendEmail}
+                  disabled={!toEmails.length || status === 'sending'}
+                  style={{
+                    ...styles.buttonPrimary,
+                    background: '#22c55e',
+                    opacity: (!toEmails.length || status === 'sending') ? 0.5 : 1,
+                  }}
+                  onMouseEnter={e => { if (toEmails.length && status !== 'sending') e.currentTarget.style.background = '#16a34a'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#22c55e'; }}
+                >
+                  {status === 'sending' ? (
+                    <><Spinner /> Sending...</>
+                  ) : (
+                    <>Send to {toEmails.length} {toEmails.length === 1 ? 'recipient' : 'recipients'}</>
+                  )}
+                </button>
               </div>
             </div>
           )}
 
-          {/* STEP 4 */}
+          {/* STEP 4: Success */}
           {step === 4 && (
-            <div className="fade-in" style={{ textAlign:"center", padding:"64px 0" }}>
-              <div style={{ 
-                width:72, height:72, borderRadius:18, 
-                background: "linear-gradient(135deg, #6366f1, #8b5cf6)", 
-                display:"flex", alignItems:"center", justifyContent:"center", 
-                margin:"0 auto 24px", boxShadow:"0 8px 32px rgba(99,102,241,.25)"
+            <div className="animate-fade-in" style={{ textAlign: 'center', padding: '80px 0' }}>
+              <div style={{
+                width: 80, height: 80, borderRadius: 24,
+                background: 'linear-gradient(135deg, #22c55e, #10b981)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 28px',
+                boxShadow: '0 20px 60px rgba(34,197,94,0.3)',
               }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
               </div>
-              <h1 style={{ fontSize:26, fontWeight:600, fontFamily:"'Sora',sans-serif", marginBottom:8, color:"#a5b4fc" }}>Update Sent</h1>
-              <p style={{ fontSize:14, color:"#cbd5e1", marginBottom:4 }}>
-                Delivered to <span style={{ color:"#6366f1", fontWeight:500 }}>{toEmails.length} recipient{toEmails.length!==1?"s":""}</span>
-                {ccEmails.length>0&&<span style={{ color:"#94a3b8" }}> · {ccEmails.length} CC</span>}
+              
+              <h1 style={{ fontSize: 32, fontWeight: 600, color: '#fafafa', marginBottom: 12, letterSpacing: '-0.02em' }}>
+                Update Sent
+              </h1>
+              <p style={{ fontSize: 16, color: '#a1a1aa', marginBottom: 6 }}>
+                Delivered to <span style={{ color: '#22c55e', fontWeight: 500 }}>{toEmails.length} recipient{toEmails.length !== 1 ? 's' : ''}</span>
+                {ccEmails.length > 0 && <span style={{ color: '#71717a' }}> · {ccEmails.length} CC</span>}
               </p>
-              <p style={{ fontSize:12, color:"#64748b", marginBottom:48 }}>
-                {new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})} · {template?.name}
+              <p style={{ fontSize: 14, color: '#52525b', marginBottom: 48 }}>
+                {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} · {template?.name}
               </p>
-              <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
-                <button className="btn-ghost" onClick={()=>{setStep(3);setStatus("sent");}}>View Details</button>
-                <button className="btn-primary" onClick={reset}>Send Another Update →</button>
+              
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <button onClick={() => { setStep(3); setStatus('sent'); }} style={styles.buttonSecondary}>
+                  View Details
+                </button>
+                <button onClick={reset} style={styles.buttonPrimary}>
+                  Send Another Update →
+                </button>
               </div>
             </div>
           )}
-        </main>
+        </div>
       )}
     </div>
   );
