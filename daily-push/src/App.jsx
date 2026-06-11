@@ -930,7 +930,7 @@ export default function App() {
                         <div key={t.id} onClick={() => selectTemplate(t.id)} style={{
                           ...styles.glass, padding: '20px 24px', cursor: 'pointer',
                           transition: 'all 0.3s ease', position: 'relative',
-                          borderLeft: `3px solid ${t.color || '#6366f1'}`,
+                          borderLeft: `6px solid ${t.color || '#6366f1'}`,
                         }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.3)'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
@@ -960,7 +960,7 @@ export default function App() {
                         <div key={t.id} onClick={() => selectTemplate(t.id)} style={{
                           ...styles.glass, padding: '20px 24px', cursor: 'pointer',
                           transition: 'all 0.3s ease', position: 'relative',
-                          borderLeft: `3px solid ${t.color}`,
+                          borderLeft: `6px solid ${t.color}`,
                         }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.3)'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
@@ -988,7 +988,7 @@ export default function App() {
                       <div key={t.id} onClick={() => selectTemplate(t.id)} style={{
                         ...styles.glass, padding: '20px 24px', cursor: 'pointer',
                         transition: 'all 0.3s ease', position: 'relative',
-                        borderLeft: `3px solid ${t.color}`,
+                        borderLeft: `6px solid ${t.color}`,
                       }}
                         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.3)'; }}
                         onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
