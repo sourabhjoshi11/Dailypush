@@ -5,7 +5,6 @@ import httpx
 import os
 from dotenv import load_dotenv
 from supabase import create_client
-import logging
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from pydantic import BaseModel
@@ -24,24 +23,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Supabase (initialized on startup to avoid import-time failures)
-logger = logging.getLogger(__name__)
-supabase = None
-
-
-@app.on_event("startup")
-def startup_event():
-    global supabase
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_KEY")
-    if not url or not key:
-        logger.warning("SUPABASE_URL or SUPABASE_KEY not set. Supabase client will not be initialized.")
-        return
-    try:
-        supabase = create_client(url, key)
-        logger.info("Supabase client initialized.")
-    except Exception as e:
-        logger.exception("Failed to initialize Supabase client: %s", e)
+# Supabase
+supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
 # Config
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
@@ -55,6 +38,8 @@ GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
 ]
 N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 # ── JWT helpers ──────────────────────────────────────────────
 def create_jwt(user_id: str, email: str) -> str:
@@ -77,11 +62,6 @@ def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Missing token")
     return decode_jwt(auth.split(" ")[1])
 
-
-def require_supabase():
-    if not supabase:
-        raise HTTPException(status_code=500, detail="Supabase not configured")
-
 # ── Auth routes ───────────────────────────────────────────────
 @app.get("/auth/google")
 def google_login():
@@ -100,7 +80,6 @@ def google_login():
 @app.get("/auth/callback")
 async def google_callback(code: str):
     # Exchange code for tokens
-    require_supabase()
     async with httpx.AsyncClient() as client:
         token_res = await client.post(
             "https://oauth2.googleapis.com/token",
@@ -156,7 +135,6 @@ async def google_callback(code: str):
 
 @app.get("/me")
 def get_me(user=Depends(get_current_user)):
-    require_supabase()
     res = supabase.table("users").select("id,email,name,picture").eq("id", user["sub"]).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="User not found")
@@ -171,10 +149,38 @@ class SendEmailRequest(BaseModel):
     body: str
     template_name: Optional[str] = ""
 
+class RefineRequest(BaseModel):
+    prompt: str
+
+@app.post("/refine")
+async def refine_text(payload: RefineRequest, user=Depends(get_current_user)):
+    if not GROQ_API_KEY:
+        raise HTTPException(status_code=500, detail="GROQ_API_KEY not configured")
+    async with httpx.AsyncClient() as client:
+        res = await client.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": GROQ_MODEL,
+                "messages": [
+                    {"role": "system", "content": "You are a professional writing assistant. Refine and polish work updates. Be concise, clear, and professional. Return only plain text — no markdown, no bullet symbols, no ** bold **, no # headers. Always preserve field labels in the output formatted as Label: value on separate lines."},
+                    {"role": "user", "content": payload.prompt}
+                ],
+                "max_tokens": 600,
+            },
+            timeout=20,
+        )
+    if not res.is_success:
+        raise HTTPException(status_code=502, detail="Groq API error")
+    data = res.json()
+    raw = data["choices"][0]["message"]["content"].strip()
+    clean = raw.replace("**", "").replace("__", "")
+    return {"refined": clean}
+
+
 @app.post("/send")
 async def send_email(payload: SendEmailRequest, user=Depends(get_current_user)):
     # Get user info from Supabase
-    require_supabase()
     res = supabase.table("users").select("id,email,name").eq("id", user["sub"]).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="User not found")
@@ -229,7 +235,6 @@ async def send_email(payload: SendEmailRequest, user=Depends(get_current_user)):
 # ── Sent emails history ───────────────────────────────────────
 @app.get("/emails/history")
 def get_history(user=Depends(get_current_user)):
-    require_supabase()
     cutoff = (datetime.utcnow() - timedelta(days=5)).isoformat()
     res = supabase.table("sent_emails") \
         .select("*") \
@@ -249,13 +254,11 @@ class TemplateModel(BaseModel):
 
 @app.get("/templates")
 def get_templates(user=Depends(get_current_user)):
-    require_supabase()
     res = supabase.table("templates").select("*").eq("user_id", user["sub"]).order("created_at").execute()
     return res.data
 
 @app.post("/templates")
 def create_template(template: TemplateModel, user=Depends(get_current_user)):
-    require_supabase()
     res = supabase.table("templates").insert({
         "user_id": user["sub"],
         "name": template.name,
@@ -268,7 +271,6 @@ def create_template(template: TemplateModel, user=Depends(get_current_user)):
 
 @app.delete("/templates/{template_id}")
 def delete_template(template_id: str, user=Depends(get_current_user)):
-    require_supabase()
     supabase.table("templates").delete().eq("id", template_id).eq("user_id", user["sub"]).execute()
     return {"success": True}
 

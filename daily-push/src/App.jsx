@@ -39,20 +39,15 @@ const DEFAULT_TEMPLATES = [
   },
 ];
 
-const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "compound-beta"];
 const STORAGE_KEY = "daily_push_config";
 const TEMPLATES_KEY = "daily_push_custom_templates";
-
 const EMOJI_OPTIONS = ["📝","🚀","💡","🎯","🔥","⚡","🛠️","📊","🎨","💬","🧠","✅","📌","🔔","💎","🌟"];
+const API_URL = "https://dailypush-backend.onrender.com";
 
 function loadConfig() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; }
 }
 function saveConfig(cfg) { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); }
-function loadCustomTemplates() {
-  try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || "[]"); } catch { return []; }
-}
-function saveCustomTemplates(t) { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(t)); }
 
 function buildPrompt(template, formData) {
   let prompt = template.aiPrompt || "";
@@ -62,7 +57,6 @@ function buildPrompt(template, formData) {
   return prompt;
 }
 
-// Email chip input component
 function EmailChipInput({ label, chips, onChange, placeholder }) {
   const [input, setInput] = useState("");
   const addChip = (val) => {
@@ -73,9 +67,11 @@ function EmailChipInput({ label, chips, onChange, placeholder }) {
   const removeChip = (i) => onChange(chips.filter((_, idx) => idx !== i));
   return (
     <div>
-      <label style={{ fontSize: 13, color: "#64748b", fontWeight: 500, display: "block", marginBottom: 8 }}>{label}</label>
-      <div style={{ background: "#13131f", border: "1.5px solid #1e2235", borderRadius: 8, padding: "8px 12px", minHeight: 46, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", cursor: "text" }}
-        onClick={e => e.currentTarget.querySelector("input")?.focus()}>
+      <label style={{ fontSize: 13, color: "#cbd5e1", fontWeight: 600, display: "block", marginBottom: 8 }}>{label}</label>
+      <div
+        style={{ background: "#13131f", border: "1.5px solid #1e2235", borderRadius: 8, padding: "8px 12px", minHeight: 46, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", cursor: "text" }}
+        onClick={e => e.currentTarget.querySelector("input")?.focus()}
+      >
         {chips.map((chip, i) => (
           <span key={i} style={{ background: "#1e1b4b", border: "1px solid #3730a3", borderRadius: 5, padding: "3px 8px", fontSize: 12, color: "#a5b4fc", display: "flex", alignItems: "center", gap: 5 }}>
             {chip}
@@ -85,15 +81,68 @@ function EmailChipInput({ label, chips, onChange, placeholder }) {
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (["Enter", ",", ";", "Tab"].includes(e.key)) { e.preventDefault(); addChip(input); } if (e.key === "Backspace" && !input && chips.length) removeChip(chips.length - 1); }}
+          onKeyDown={e => {
+            if (["Enter", ",", ";", "Tab"].includes(e.key)) { e.preventDefault(); addChip(input); }
+            if (e.key === "Backspace" && !input && chips.length) removeChip(chips.length - 1);
+          }}
           onBlur={() => input && addChip(input)}
           onPaste={e => { e.preventDefault(); addChip(e.clipboardData.getData("text")); }}
           placeholder={chips.length === 0 ? placeholder : ""}
           style={{ border: "none", outline: "none", background: "transparent", color: "#e2e8f0", fontSize: 14, fontFamily: "Inter, sans-serif", flex: 1, minWidth: 140 }}
         />
       </div>
-      <p style={{ fontSize: 11, color: "#2a2d40", marginTop: 5 }}>Type and press Enter or comma. Paste multiple emails at once.</p>
+      <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 5 }}>Type and press Enter or comma. Paste multiple emails at once.</p>
     </div>
+  );
+}
+
+function HistoryPage({ apiUrl }) {
+  const [emails, setEmails] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem("dp_token");
+    fetch(`${apiUrl}/emails/history`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => { setEmails(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [apiUrl]);
+
+  return (
+    <main style={{ maxWidth: 660, margin: "0 auto", padding: "48px 24px" }}>
+      <h1 style={{ fontSize: 24, fontFamily: "'Sora', sans-serif", fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Email History</h1>
+      <p style={{ fontSize: 14, color: "#cbd5e1", marginBottom: 32 }}>Last 5 days of sent updates.</p>
+      {loading && <p style={{ color: "#cbd5e1" }}>Loading...</p>}
+      {!loading && emails.length === 0 && (
+        <div style={{ textAlign: "center", padding: "48px 0", color: "#94a3b8" }}>
+          <p style={{ fontSize: 32, marginBottom: 12 }}>📭</p>
+          <p>No emails sent in the last 5 days.</p>
+        </div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {emails.map(e => (
+          <div key={e.id} style={{ background: "#13131f", border: "1px solid #1a1a2e", borderRadius: 10, padding: "18px 20px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+              <div>
+                <p style={{ fontSize: 15, color: "#c7d2fe", fontWeight: 500, marginBottom: 4 }}>{e.subject}</p>
+                <p style={{ fontSize: 12, color: "#cbd5e1" }}>To: {e.to_emails?.join(", ")}</p>
+                {e.cc_emails?.length > 0 && <p style={{ fontSize: 12, color: "#cbd5e1" }}>CC: {e.cc_emails.join(", ")}</p>}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                <span style={{ fontSize: 11, color: e.status === "sent" ? "#4ade80" : "#f87171", background: e.status === "sent" ? "#0d2018" : "#1a0808", border: `1px solid ${e.status === "sent" ? "#1a3a25" : "#3a1010"}`, borderRadius: 4, padding: "2px 8px" }}>
+                  {e.status}
+                </span>
+                <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                  {new Date(e.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            </div>
+            <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 80, overflow: "hidden" }}>{e.body}</p>
+            {e.template_name && <span style={{ fontSize: 11, color: "#cbd5e1", marginTop: 8, display: "block" }}>Template: {e.template_name}</span>}
+          </div>
+        ))}
+      </div>
+    </main>
   );
 }
 
@@ -109,19 +158,14 @@ export default function App() {
   const [refinedContent, setRefinedContent] = useState("");
   const [status, setStatus] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
   const [customTemplates, setCustomTemplates] = useState([]);
 
-  // Config
-  const [webhookUrl, setWebhookUrl] = useState("");
-  const [groqKey, setGroqKey] = useState("");
-  const [groqModel, setGroqModel] = useState("llama-3.3-70b-versatile");
-  const [fromEmail, setFromEmail] = useState("");
-  const [configSaved, setConfigSaved] = useState(false);
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [page, setPage] = useState("app");
 
-  // Template builder state
   const [tb, setTb] = useState({ name: "", icon: "📝", rawText: "", fields: [], aiPrompt: "" });
   const [tbParsed, setTbParsed] = useState(false);
 
@@ -149,93 +193,115 @@ export default function App() {
   };
 
   useEffect(() => {
-    const cfg = loadConfig();
-    if (cfg.webhookUrl) setWebhookUrl(cfg.webhookUrl);
-    if (cfg.groqKey) setGroqKey(cfg.groqKey);
-    if (cfg.groqModel) setGroqModel(cfg.groqModel);
-    if (cfg.fromEmail) setFromEmail(cfg.fromEmail);
-    setCustomTemplates(loadCustomTemplates());
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    if (token) {
+      localStorage.setItem("dp_token", token);
+      window.history.replaceState({}, "", "/");
+    }
+    const savedToken = token || localStorage.getItem("dp_token");
+    if (savedToken) {
+      fetch(`${API_URL}/me`, { headers: { Authorization: `Bearer ${savedToken}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(u => { setUser(u); setAuthLoading(false); })
+        .catch(() => setAuthLoading(false));
+    } else {
+      setAuthLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const token = localStorage.getItem("dp_token");
+    fetch(`${API_URL}/templates`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => setCustomTemplates(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [user]);
 
   const allTemplates = [...DEFAULT_TEMPLATES, ...customTemplates];
   const template = allTemplates.find(t => t.id === selectedTemplate);
   const defaultSubject = `Daily Update — ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
-  const isConfigured = groqKey && webhookUrl;
 
-  const handleSaveConfig = () => {
-    saveConfig({ webhookUrl, groqKey, groqModel, fromEmail });
-    setConfigSaved(true);
-    setTimeout(() => setConfigSaved(false), 2000);
+  const handleLogout = () => {
+    localStorage.removeItem("dp_token");
+    setUser(null);
   };
 
   const handleFieldChange = (key, value) => setFormData(prev => ({ ...prev, [key]: value }));
 
-  const tbSave = () => {
+  const tbSave = async () => {
     if (!tb.name || !tb.fields.length) return;
-    const newT = { ...tb, id: `custom_${Date.now()}`, isDefault: false };
-    const updated = [...customTemplates, newT];
-    setCustomTemplates(updated);
-    saveCustomTemplates(updated);
-    setShowTemplateBuilder(false);
-    setTb({ name: "", icon: "📝", rawText: "", fields: [], aiPrompt: "" });
-    setTbParsed(false);
+    const token = localStorage.getItem("dp_token");
+    try {
+      const res = await fetch(`${API_URL}/templates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: tb.name, icon: tb.icon, raw_text: tb.rawText, fields: tb.fields, ai_prompt: tb.aiPrompt }),
+      });
+      const saved = await res.json();
+      setCustomTemplates(prev => [...prev, { ...saved, aiPrompt: saved.ai_prompt, isDefault: false }]);
+      setShowTemplateBuilder(false);
+      setTb({ name: "", icon: "📝", rawText: "", fields: [], aiPrompt: "" });
+      setTbParsed(false);
+    } catch (e) {
+      alert("Failed to save template");
+    }
   };
-  const deleteCustomTemplate = (id) => {
-    const updated = customTemplates.filter(t => t.id !== id);
-    setCustomTemplates(updated);
-    saveCustomTemplates(updated);
+
+  const deleteCustomTemplate = async (id) => {
+    const token = localStorage.getItem("dp_token");
+    await fetch(`${API_URL}/templates/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    setCustomTemplates(prev => prev.filter(t => t.id !== id));
     if (selectedTemplate === id) setSelectedTemplate(null);
   };
 
   const refineWithGroq = async () => {
-    if (!groqKey) { setErrorMsg("Add your Groq API key in ⚙ config first."); setStatus("error"); return; }
     if (!formData[template.fields[0].key]) { setErrorMsg("Fill in at least the first field."); setStatus("error"); return; }
     setStatus("refining"); setErrorMsg("");
+    const token = localStorage.getItem("dp_token");
     try {
       const prompt = buildPrompt(template, formData);
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const res = await fetch(`${API_URL}/refine`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${groqKey}` },
-        body: JSON.stringify({
-          model: groqModel,
-          messages: [
-            { role: "system", content: `You are a professional writing assistant. Refine and polish work updates. Be concise, clear, and professional. Return only plain text — no markdown, no bullet symbols, no ** bold **, no # headers, no formatting of any kind. Just clean readable text. Always preserve field labels in the output formatted as "Label: value" on separate lines.` },
-            { role: "user", content: prompt },
-          ],
-          max_tokens: 600,
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ prompt }),
       });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Groq API error"); }
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Refine failed"); }
       const data = await res.json();
-      const raw = data.choices[0].message.content.trim();
-      const clean = raw.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1').replace(/^#+\s/gm, '').replace(/^[-*]\s/gm, '');
-      setRefinedContent(clean);
-      setStatus("refined"); setStep(3);
-    } catch (e) { setErrorMsg(e.message); setStatus("error"); }
+      setRefinedContent(data.refined);
+      setStatus("refined");
+      setStep(3);
+    } catch (e) {
+      setErrorMsg(e.message);
+      setStatus("error");
+    }
   };
 
-  const sendViaWebhook = async () => {
-    if (!webhookUrl) { setErrorMsg("Add your n8n webhook URL in ⚙ config."); setStatus("error"); return; }
+  const sendEmail = async () => {
     if (toEmails.length === 0) { setErrorMsg("Add at least one recipient email."); setStatus("error"); return; }
     setStatus("sending"); setErrorMsg("");
+    const token = localStorage.getItem("dp_token");
     try {
-      const res = await fetch(webhookUrl, {
+      const res = await fetch(`${API_URL}/send`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          to: toEmails.join(","),
-          cc: ccEmails.join(",") || undefined,
-          bcc: bccEmails.join(",") || undefined,
-          from: fromEmail || undefined,
+          to: toEmails,
+          cc: ccEmails,
+          bcc: bccEmails,
           subject: subject || defaultSubject,
           body: refinedContent,
-          template: selectedTemplate,
-          timestamp: new Date().toISOString(),
+          template_name: template?.name || selectedTemplate,
         }),
       });
-      if (!res.ok) throw new Error(`Webhook responded with ${res.status}`);
-      setStatus("sent"); setStep(4);
-    } catch (e) { setErrorMsg(e.message); setStatus("error"); }
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Send failed"); }
+      setStatus("sent");
+      setStep(4);
+    } catch (e) {
+      setErrorMsg(e.message);
+      setStatus("error");
+    }
   };
 
   const reset = () => {
@@ -247,6 +313,38 @@ export default function App() {
 
   const accent = "#6366f1";
 
+  // ── Loading screen ──────────────────────────────────────────────────
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0d0d14", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter, sans-serif" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 32, marginBottom: 16 }}>⚡</div>
+          <p style={{ color: "#cbd5e1", fontSize: 14 }}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Landing / login screen ──────────────────────────────────────────
+  if (!user) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0d0d14", fontFamily: "Inter, sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Sora:wght@300;400;600&display=swap'); * { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+        <div style={{ textAlign: "center", maxWidth: 440 }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#1e1b4b", border: "1.5px solid #3730a3", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 28, boxShadow: "0 0 32px rgba(99,102,241,0.2)" }}>✉</div>
+          <h1 style={{ fontSize: 32, fontFamily: "'Sora', sans-serif", fontWeight: 600, color: "#e2e8f0", marginBottom: 12 }}>daily push</h1>
+          <p style={{ fontSize: 16, color: "#cbd5e1", lineHeight: 1.7, marginBottom: 40 }}>Write your daily update, let AI refine it, send it from your own Gmail — in under 2 minutes.</p>
+          <a href={`${API_URL}/auth/google`} style={{ display: "inline-flex", alignItems: "center", gap: 12, background: "#fff", color: "#1a1a2e", padding: "14px 28px", borderRadius: 8, fontSize: 15, fontWeight: 500, textDecoration: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.3)" }}>
+            <img src="https://www.google.com/favicon.ico" width={18} height={18} alt="Google" />
+            Continue with Google
+          </a>
+          <p style={{ fontSize: 12, color: "#94a3b8", marginTop: 20 }}>No password needed · Sends from your Gmail</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Authenticated app ───────────────────────────────────────────────
   return (
     <div style={{ minHeight: "100vh", background: "#0d0d14", fontFamily: "'Inter', sans-serif", color: "#e2e8f0" }}>
       <style>{`
@@ -258,197 +356,116 @@ export default function App() {
         textarea, input, select { font-family: 'Inter', sans-serif !important; }
         .fade-in { animation: fadeIn 0.4s ease forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .btn-primary {
-          background: #6366f1; color: #fff; border: none; padding: 12px 28px;
-          font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 500;
-          cursor: pointer; border-radius: 8px; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px;
-        }
+        .btn-primary { background: #6366f1; color: #fff; border: none; padding: 12px 28px; font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; border-radius: 8px; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px; }
         .btn-primary:hover { background: #818cf8; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(99,102,241,0.35); }
         .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
-        .btn-ghost {
-          background: transparent; color: #94a3b8; border: 1px solid #1e2235;
-          padding: 11px 22px; font-family: 'Inter', sans-serif; font-size: 14px;
-          cursor: pointer; border-radius: 8px; transition: all 0.2s ease;
-        }
+        .btn-ghost { background: transparent; color: #cbd5e1; border: 1px solid #1e2235; padding: 11px 22px; font-family: 'Inter', sans-serif; font-size: 14px; cursor: pointer; border-radius: 8px; transition: all 0.2s ease; }
         .btn-ghost:hover { border-color: #6366f1; color: #a5b4fc; background: rgba(99,102,241,0.06); }
-        .btn-outline-accent {
-          background: rgba(99,102,241,0.08); color: #a5b4fc; border: 1px solid #3730a3;
-          padding: 10px 18px; font-family: 'Inter', sans-serif; font-size: 13px;
-          cursor: pointer; border-radius: 8px; transition: all 0.2s ease;
-        }
+        .btn-outline-accent { background: rgba(99,102,241,0.08); color: #a5b4fc; border: 1px solid #3730a3; padding: 10px 18px; font-family: 'Inter', sans-serif; font-size: 13px; cursor: pointer; border-radius: 8px; transition: all 0.2s ease; }
         .btn-outline-accent:hover { background: rgba(99,102,241,0.15); border-color: #6366f1; }
-        .btn-danger {
-          background: transparent; color: #f87171; border: 1px solid #3a1010;
-          padding: 5px 12px; font-family: 'Inter', sans-serif; font-size: 12px;
-          cursor: pointer; border-radius: 6px; transition: all 0.2s ease;
-        }
+        .btn-danger { background: transparent; color: #f87171; border: 1px solid #3a1010; padding: 5px 12px; font-family: 'Inter', sans-serif; font-size: 12px; cursor: pointer; border-radius: 6px; transition: all 0.2s ease; }
         .btn-danger:hover { background: #1a0808; border-color: #f87171; }
-        .input-field {
-          width: 100%; background: #13131f; border: 1.5px solid #1e2235; color: #e2e8f0;
-          padding: 12px 16px; border-radius: 8px; font-size: 15px; outline: none;
-          transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
+        .input-field { width: 100%; background: #13131f; border: 1.5px solid #1e2235; color: #e2e8f0; padding: 12px 16px; border-radius: 8px; font-size: 15px; outline: none; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
         .input-field:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
         .input-field::placeholder { color: #2a2d40; }
         textarea.input-field { resize: vertical; line-height: 1.75; }
-        select.input-field { appearance: none; cursor: pointer; }
-        .template-card {
-          background: #13131f; border: 1.5px solid #1a1a2e; border-radius: 12px;
-          padding: 20px 22px; cursor: pointer; transition: all 0.2s ease; position: relative;
-        }
+        .template-card { background: #13131f; border: 1.5px solid #1a1a2e; border-radius: 12px; padding: 20px 22px; cursor: pointer; transition: all 0.2s ease; position: relative; }
         .template-card:hover { border-color: #4338ca; background: #161625; transform: translateY(-2px); box-shadow: 0 4px 24px rgba(99,102,241,0.1); }
         .template-card.active { border-color: #6366f1; background: #161625; box-shadow: 0 0 0 1px #6366f1, 0 4px 24px rgba(99,102,241,0.15); }
         .step-dot { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; transition: all 0.3s ease; }
         .pulse { animation: pulse 1.5s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        .panel {
-          position: fixed; top: 0; right: 0; height: 100vh; width: 380px;
-          background: #0f0f1a; border-left: 1px solid #1a1a2e; padding: 32px 28px;
-          z-index: 100; overflow-y: auto; transform: translateX(100%);
-          transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
-        }
+        .panel { position: fixed; top: 0; right: 0; height: 100vh; width: 420px; background: #0f0f1a; border-left: 1px solid #1a1a2e; padding: 32px 28px; z-index: 100; overflow-y: auto; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); }
         .panel.open { transform: translateX(0); }
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 99; opacity: 0; pointer-events: none; transition: opacity 0.3s; backdrop-filter: blur(2px); }
         .overlay.open { opacity: 1; pointer-events: all; }
-        .modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.85); padding: 24px; backdrop-filter: blur(4px); }
-        .modal-inner { background: #0f0f1a; border: 1px solid #1a1a2e; border-radius: 14px; width: 100%; max-width: 600px; max-height: 88vh; overflow-y: auto; padding: 32px; }
-        .preview-inner { background: #fff; border-radius: 12px; width: 100%; max-width: 580px; max-height: 82vh; overflow-y: auto; font-family: 'Inter', sans-serif; box-shadow: 0 24px 80px rgba(0,0,0,0.5); }
-        .tag { background: #1a1a2e; border: 1px solid #2a2a42; border-radius: 5px; padding: 3px 10px; font-size: 12px; color: #64748b; }
-        .config-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-        .section-label { font-size: 11px; color: #4a5568; letter-spacing: 0.08em; font-weight: 500; text-transform: uppercase; }
-        .card-box { background: #13131f; border: 1px solid #1a1a2e; border-radius: 10px; padding: 18px; }
-        .error-box { padding: 12px 16px; background: #1a0808; border: 1px solid #3a1010; border-radius: 8px; }
         .emoji-btn { background: #13131f; border: 1.5px solid #1e2235; border-radius: 6px; padding: 6px 8px; cursor: pointer; font-size: 16px; transition: all 0.15s; }
         .emoji-btn:hover { border-color: #6366f1; background: #1e1b4b; }
         .emoji-btn.selected { border-color: #6366f1; background: #1e1b4b; box-shadow: 0 0 8px rgba(99,102,241,0.3); }
-        .field-row { display: flex; gap: 10px; align-items: flex-start; }
-        .remove-btn { background: #1a0a0a; border: 1px solid #3a1010; color: #f87171; border-radius: 6px; padding: 8px 10px; cursor: pointer; font-size: 14px; flex-shrink: 0; margin-top: 0; transition: all 0.15s; }
-        .remove-btn:hover { background: #2a0808; }
+        .section-label { font-size: 11px; color: #4a5568; letter-spacing: 0.08em; font-weight: 500; text-transform: uppercase; }
+        .tag { background: #1a1a2e; border: 1px solid #2a2a42; border-radius: 5px; padding: 3px 10px; font-size: 12px; color: #94a3b8; }
+        .error-box { padding: 12px 16px; background: #1a0808; border: 1px solid #3a1010; border-radius: 8px; }
         .divider { height: 1px; background: #1a1a2e; margin: 20px 0; }
       `}</style>
+
+      {/* Overlay for template builder panel */}
+      <div className={`overlay ${showTemplateBuilder ? "open" : ""}`} onClick={() => setShowTemplateBuilder(false)} />
 
       {/* Header */}
       <header style={{ borderBottom: "1px solid #131320", padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0d0d14" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 8, height: 8, background: isConfigured ? "#6366f1" : "#f59e0b", borderRadius: "50%", boxShadow: isConfigured ? "0 0 8px rgba(99,102,241,0.6)" : "0 0 8px rgba(245,158,11,0.6)" }} />
+          <div style={{ width: 8, height: 8, background: "#6366f1", borderRadius: "50%", boxShadow: "0 0 8px rgba(99,102,241,0.6)" }} />
           <span style={{ fontSize: 15, fontFamily: "'Sora', sans-serif", fontWeight: 600, color: "#c7d2fe", letterSpacing: "0.04em" }}>daily push</span>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <span style={{ fontSize: 13, color: "#2a2d40" }}>{new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
-          {!isConfigured && <span style={{ fontSize: 12, color: "#f59e0b", background: "#1e1500", border: "1px solid #3a2e00", borderRadius: 5, padding: "3px 10px" }}>setup needed</span>}
-          <button className="btn-ghost" onClick={() => setShowSettings(true)} style={{ padding: "7px 16px", fontSize: 13 }}>⚙ config</button>
+          <span style={{ fontSize: 13, color: "#94a3b8" }}>{new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
+          <button className="btn-ghost" onClick={() => setPage(page === "history" ? "app" : "history")} style={{ padding: "7px 16px", fontSize: 13 }}>
+            {page === "history" ? "← compose" : "history"}
+          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#13131f", border: "1px solid #1e2235", borderRadius: 8, padding: "6px 12px" }}>
+            {user.picture && <img src={user.picture} width={22} height={22} style={{ borderRadius: "50%" }} alt="" />}
+            <span style={{ fontSize: 13, color: "#cbd5e1" }}>{user.name?.split(" ")[0]}</span>
+            <button onClick={handleLogout} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 12 }}>logout</button>
+          </div>
         </div>
       </header>
 
-      {/* Overlay */}
-      <div className={`overlay ${showSettings || showTemplateBuilder ? "open" : ""}`} onClick={() => { setShowSettings(false); setShowTemplateBuilder(false); }} />
-
-      {/* Settings Panel */}
-      <div className={`panel ${showSettings ? "open" : ""}`}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
-          <span style={{ fontSize: 16, fontFamily: "'Sora', sans-serif", fontWeight: 600, color: "#a5b4fc" }}>Configuration</span>
-          <button className="btn-ghost" onClick={() => setShowSettings(false)} style={{ padding: "5px 12px", fontSize: 13 }}>✕</button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div className="card-box">
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <div className="config-dot" style={{ background: groqKey ? "#6366f1" : "#2a2a3d", boxShadow: groqKey ? "0 0 6px rgba(99,102,241,0.5)" : "none" }} />
-              <span className="section-label">Groq — AI Refinement</span>
-            </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 13, color: "#64748b", display: "block", marginBottom: 7 }}>API Key</label>
-              <input className="input-field" type="password" placeholder="gsk_..." value={groqKey} onChange={e => setGroqKey(e.target.value)} />
-              <p style={{ fontSize: 12, color: "#2a2d40", marginTop: 5 }}>console.groq.com → free tier</p>
-            </div>
-            <div>
-              <label style={{ fontSize: 13, color: "#64748b", display: "block", marginBottom: 7 }}>Model</label>
-              <select className="input-field" value={groqModel} onChange={e => setGroqModel(e.target.value)}>
-                {GROQ_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="card-box">
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <div className="config-dot" style={{ background: webhookUrl ? "#6366f1" : "#2a2a3d", boxShadow: webhookUrl ? "0 0 6px rgba(99,102,241,0.5)" : "none" }} />
-              <span className="section-label">n8n + Resend — Email</span>
-            </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 13, color: "#64748b", display: "block", marginBottom: 7 }}>Webhook URL</label>
-              <input className="input-field" type="url" placeholder="https://your-app.onrender.com/webhook/..." value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} style={{ fontSize: 13 }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 13, color: "#64748b", display: "block", marginBottom: 7 }}>From Email <span style={{ color: "#2a2d40" }}>(optional)</span></label>
-              <input className="input-field" type="email" placeholder="you@yourdomain.com" value={fromEmail} onChange={e => setFromEmail(e.target.value)} />
-            </div>
-          </div>
-          <button className="btn-primary" onClick={handleSaveConfig} style={{ width: "100%", justifyContent: "center" }}>
-            {configSaved ? "✓ Saved" : "Save Config"}
-          </button>
-        </div>
-      </div>
-
       {/* Template Builder Panel */}
-      <div className={`panel ${showTemplateBuilder ? "open" : ""}`} style={{ width: 420 }}>
+      <div className={`panel ${showTemplateBuilder ? "open" : ""}`}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <span style={{ fontSize: 16, fontFamily: "'Sora', sans-serif", fontWeight: 600, color: "#a5b4fc" }}>New Template</span>
           <button className="btn-ghost" onClick={() => setShowTemplateBuilder(false)} style={{ padding: "5px 12px", fontSize: 13 }}>✕</button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-          {/* Step 1 — Name + Icon */}
           <div>
-            <label style={{ fontSize: 13, color: "#64748b", fontWeight: 500, display: "block", marginBottom: 8 }}>Template Name *</label>
+            <label style={{ fontSize: 13, color: "#cbd5e1", fontWeight: 600, display: "block", marginBottom: 8 }}>Template Name *</label>
             <input className="input-field" placeholder="e.g. Weekly Review" value={tb.name} onChange={e => setTb(p => ({ ...p, name: e.target.value }))} />
           </div>
           <div>
-            <label style={{ fontSize: 13, color: "#64748b", fontWeight: 500, display: "block", marginBottom: 10 }}>Icon</label>
+            <label style={{ fontSize: 13, color: "#cbd5e1", fontWeight: 600, display: "block", marginBottom: 10 }}>Icon</label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {EMOJI_OPTIONS.map(e => (
                 <button key={e} className={`emoji-btn ${tb.icon === e ? "selected" : ""}`} onClick={() => setTb(p => ({ ...p, icon: e }))}>{e}</button>
               ))}
             </div>
           </div>
-
-          {/* Step 2 — Paste template structure */}
           <div>
-            <label style={{ fontSize: 13, color: "#64748b", fontWeight: 500, display: "block", marginBottom: 6 }}>Paste your template structure *</label>
-            <p style={{ fontSize: 12, color: "#4a5568", marginBottom: 10, lineHeight: 1.6 }}>
+            <label style={{ fontSize: 13, color: "#cbd5e1", fontWeight: 600, display: "block", marginBottom: 6 }}>Paste your template structure *</label>
+            <p style={{ fontSize: 12, color: "#94a3b8", marginBottom: 10, lineHeight: 1.6 }}>
               Write each field on its own line as <span style={{ color: "#a5b4fc" }}>Field Name :</span> — the app will auto-detect all fields.
             </p>
             <textarea
               className="input-field"
-              placeholder={"Name :\nDate :\nProject :\nCompleted Tasks :\nIn Progress Tasks :\nBlockers :\nTomorrow Plan :"}
+              placeholder={"Name :\nDate :\nProject :\nCompleted Tasks :\nBlockers :\nTomorrow Plan :"}
               value={tb.rawText}
               onChange={e => { setTb(p => ({ ...p, rawText: e.target.value })); setTbParsed(false); }}
               rows={8}
               style={{ fontSize: 13, lineHeight: 1.8 }}
             />
-            <button className="btn-outline-accent" onClick={tbParse} disabled={!tb.rawText.trim()} style={{ marginTop: 10, width: "100%", justifyContent: "center" }}>
+            <button className="btn-outline-accent" onClick={tbParse} disabled={!tb.rawText.trim()} style={{ marginTop: 10, width: "100%", justifyContent: "center", display: "flex" }}>
               Detect Fields →
             </button>
           </div>
 
-          {/* Step 3 — Detected fields preview */}
           {tbParsed && tb.fields.length > 0 && (
             <div>
-              <label style={{ fontSize: 13, color: "#64748b", fontWeight: 500, display: "block", marginBottom: 10 }}>
-                Detected {tb.fields.length} fields ✓
+              <label style={{ fontSize: 13, color: "#4ade80", fontWeight: 600, display: "block", marginBottom: 10 }}>
+                ✓ Detected {tb.fields.length} fields
               </label>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {tb.fields.map((f, i) => (
                   <div key={i} style={{ background: "#13131f", border: "1px solid #1a1a2e", borderRadius: 7, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: 14, color: "#c7d2fe" }}>{f.label}</span>
-                    <span style={{ fontSize: 11, color: "#3a3a5a", fontFamily: "monospace" }}>{`{{${f.key}}}`}</span>
+                    <span style={{ fontSize: 11, color: "#94a3b8", fontFamily: "monospace" }}>{`{{${f.key}}}`}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Step 4 — AI Prompt (auto-generated, editable) */}
           {tbParsed && (
             <div>
-              <label style={{ fontSize: 13, color: "#64748b", fontWeight: 500, display: "block", marginBottom: 8 }}>AI Prompt (auto-generated, editable)</label>
+              <label style={{ fontSize: 13, color: "#cbd5e1", fontWeight: 600, display: "block", marginBottom: 8 }}>AI Prompt (auto-generated, editable)</label>
               <textarea className="input-field" value={tb.aiPrompt} onChange={e => setTb(p => ({ ...p, aiPrompt: e.target.value }))} rows={5} style={{ fontSize: 13 }} />
             </div>
           )}
@@ -461,227 +478,237 @@ export default function App() {
 
       {/* Email Preview Modal */}
       {showPreview && (
-        <div className="modal" onClick={() => setShowPreview(false)}>
-          <div className="preview-inner" onClick={e => e.stopPropagation()}>
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.85)", padding: 24, backdropFilter: "blur(4px)" }}
+          onClick={() => setShowPreview(false)}
+        >
+          <div
+            style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 580, maxHeight: "82vh", overflowY: "auto", fontFamily: "Inter, sans-serif", boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}
+            onClick={e => e.stopPropagation()}
+          >
             <div style={{ background: "#f8fafc", borderRadius: "12px 12px 0 0", padding: "18px 24px", borderBottom: "1px solid #e2e8f0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <span style={{ fontSize: 12, color: "#94a3b8", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 500 }}>Email Preview</span>
-                <button onClick={() => setShowPreview(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#94a3b8" }}>✕</button>
+                <span style={{ fontSize: 12, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 500 }}>Email Preview</span>
+                <button onClick={() => setShowPreview(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#64748b" }}>✕</button>
               </div>
-              <div style={{ fontSize: 13, color: "#64748b", display: "flex", flexDirection: "column", gap: 5 }}>
-                <div><span style={{ color: "#94a3b8", display: "inline-block", width: 44 }}>From:</span>{fromEmail || "onboarding@resend.dev"}</div>
-                <div><span style={{ color: "#94a3b8", display: "inline-block", width: 44 }}>To:</span>{toEmails.join(", ") || "—"}</div>
-                {ccEmails.length > 0 && <div><span style={{ color: "#94a3b8", display: "inline-block", width: 44 }}>CC:</span>{ccEmails.join(", ")}</div>}
-                {bccEmails.length > 0 && <div><span style={{ color: "#94a3b8", display: "inline-block", width: 44 }}>BCC:</span>{bccEmails.join(", ")}</div>}
-                <div><span style={{ color: "#94a3b8", display: "inline-block", width: 44 }}>Sub:</span>{subject || defaultSubject}</div>
+              <div style={{ fontSize: 13, color: "#475569", display: "flex", flexDirection: "column", gap: 5 }}>
+                <div><span style={{ color: "#94a3b8", display: "inline-block", width: 52 }}>From:</span><span style={{ color: "#1e293b" }}>{user?.email || "your@gmail.com"}</span></div>
+                <div><span style={{ color: "#94a3b8", display: "inline-block", width: 52 }}>To:</span><span style={{ color: "#1e293b" }}>{toEmails.join(", ") || "—"}</span></div>
+                {ccEmails.length > 0 && <div><span style={{ color: "#94a3b8", display: "inline-block", width: 52 }}>CC:</span><span style={{ color: "#1e293b" }}>{ccEmails.join(", ")}</span></div>}
+                {bccEmails.length > 0 && <div><span style={{ color: "#94a3b8", display: "inline-block", width: 52 }}>BCC:</span><span style={{ color: "#1e293b" }}>{bccEmails.join(", ")}</span></div>}
+                <div><span style={{ color: "#94a3b8", display: "inline-block", width: 52 }}>Subject:</span><span style={{ color: "#1e293b", fontWeight: 600 }}>{subject || defaultSubject}</span></div>
               </div>
             </div>
             <div style={{ padding: "32px 28px" }}>
-              <p style={{ fontSize: 15, color: "#1e293b", lineHeight: 1.85, whiteSpace: "pre-wrap" }}>{refinedContent}</p>
+              <p style={{ fontSize: 15, color: "#1e293b", lineHeight: 1.85, whiteSpace: "pre-wrap" }}>{refinedContent || "(no content yet)"}</p>
               <div style={{ marginTop: 36, paddingTop: 20, borderTop: "1px solid #f1f5f9" }}>
-                <p style={{ fontSize: 12, color: "#cbd5e1" }}>Sent via Daily Push · {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
+                <p style={{ fontSize: 12, color: "#94a3b8" }}>Sent via Daily Push · {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Main */}
-      <main style={{ maxWidth: 660, margin: "0 auto", padding: "52px 24px" }}>
+      {/* History page */}
+      {page === "history" && <HistoryPage apiUrl={API_URL} />}
 
-        {/* Progress */}
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 56 }}>
-          {["Template", "Compose", "Review", "Done"].map((label, i) => {
-            const n = i + 1, active = step === n, done = step > n;
-            return (
-              <div key={n} style={{ display: "flex", alignItems: "center", flex: i < 3 ? 1 : "none" }}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
-                  <div className="step-dot" style={{ background: done || active ? accent : "#13131f", color: done || active ? "#fff" : "#2a2d40", border: active || done ? "none" : "1.5px solid #1e2235", boxShadow: active ? "0 0 16px rgba(99,102,241,0.4)" : "none" }}>
-                    {done ? "✓" : n}
+      {/* Main app */}
+      {page === "app" && (
+        <main style={{ maxWidth: 660, margin: "0 auto", padding: "52px 24px" }}>
+
+          {/* Progress steps */}
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 56 }}>
+            {["Template", "Compose", "Review", "Done"].map((label, i) => {
+              const n = i + 1, active = step === n, done = step > n;
+              return (
+                <div key={n} style={{ display: "flex", alignItems: "center", flex: i < 3 ? 1 : "none" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
+                    <div className="step-dot" style={{ background: done || active ? accent : "#13131f", color: done || active ? "#fff" : "#2a2d40", border: active || done ? "none" : "1.5px solid #1e2235", boxShadow: active ? "0 0 16px rgba(99,102,241,0.4)" : "none" }}>
+                      {done ? "✓" : n}
+                    </div>
+                    <span style={{ fontSize: 11, color: active ? "#a5b4fc" : done ? "#6366f1" : "#2a2d40", fontWeight: active ? 500 : 400 }}>{label}</span>
                   </div>
-                  <span style={{ fontSize: 11, color: active ? "#a5b4fc" : done ? "#6366f1" : "#2a2d40", fontWeight: active ? 500 : 400 }}>{label}</span>
+                  {i < 3 && <div style={{ flex: 1, height: 1.5, background: done ? accent : "#1a1a2e", margin: "0 8px", marginBottom: 24, borderRadius: 1, transition: "background 0.4s ease" }} />}
                 </div>
-                {i < 3 && <div style={{ flex: 1, height: 1.5, background: done ? accent : "#1a1a2e", margin: "0 8px", marginBottom: 24, borderRadius: 1, transition: "background 0.4s ease" }} />}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* STEP 1 */}
-        {step === 1 && (
-          <div className="fade-in">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-              <div>
-                <h1 style={{ fontSize: 26, fontWeight: 600, fontFamily: "'Sora', sans-serif", color: "#e2e8f0" }}>Choose a template</h1>
-                <p style={{ fontSize: 15, color: "#4a5568", marginTop: 6 }}>Pick the format that fits today's update.</p>
-              </div>
-              <button className="btn-outline-accent" onClick={() => setShowTemplateBuilder(true)} style={{ flexShrink: 0, marginLeft: 16 }}>
-                + New Template
-              </button>
-            </div>
-
-            {/* Default templates */}
-            <p className="section-label" style={{ margin: "28px 0 12px" }}>Built-in</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {DEFAULT_TEMPLATES.map(t => (
-                <div key={t.id} className={`template-card ${selectedTemplate === t.id ? "active" : ""}`} onClick={() => setSelectedTemplate(t.id)}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                        <span style={{ fontSize: 20 }}>{t.icon}</span>
-                        <span style={{ fontSize: 15, fontFamily: "'Sora', sans-serif", fontWeight: 500, color: selectedTemplate === t.id ? "#a5b4fc" : "#cbd5e1" }}>{t.name}</span>
-                      </div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {t.fields.map(f => <span key={f.key} className="tag">{f.label}</span>)}
-                      </div>
-                    </div>
-                    <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, marginLeft: 20, border: `2px solid ${selectedTemplate === t.id ? accent : "#1e2235"}`, background: selectedTemplate === t.id ? accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s ease" }}>
-                      {selectedTemplate === t.id && <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>✓</span>}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Custom templates */}
-            {customTemplates.length > 0 && (
-              <>
-                <p className="section-label" style={{ margin: "24px 0 12px" }}>My Templates</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {customTemplates.map(t => (
-                    <div key={t.id} className={`template-card ${selectedTemplate === t.id ? "active" : ""}`} onClick={() => setSelectedTemplate(t.id)}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                            <span style={{ fontSize: 20 }}>{t.icon}</span>
-                            <span style={{ fontSize: 15, fontFamily: "'Sora', sans-serif", fontWeight: 500, color: selectedTemplate === t.id ? "#a5b4fc" : "#cbd5e1" }}>{t.name}</span>
-                            <span style={{ fontSize: 10, color: "#4a5568", background: "#1a1a2e", border: "1px solid #2a2a42", borderRadius: 4, padding: "1px 7px" }}>custom</span>
-                          </div>
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            {t.fields.map(f => <span key={f.key} className="tag">{f.label}</span>)}
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: 16 }}>
-                          <button className="btn-danger" onClick={e => { e.stopPropagation(); deleteCustomTemplate(t.id); }}>Delete</button>
-                          <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, border: `2px solid ${selectedTemplate === t.id ? accent : "#1e2235"}`, background: selectedTemplate === t.id ? accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s ease" }}>
-                            {selectedTemplate === t.id && <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>✓</span>}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            <div style={{ marginTop: 36, display: "flex", justifyContent: "flex-end" }}>
-              <button className="btn-primary" disabled={!selectedTemplate} onClick={() => setStep(2)}>Continue →</button>
-            </div>
+              );
+            })}
           </div>
-        )}
 
-        {/* STEP 2 */}
-        {step === 2 && template && (
-          <div className="fade-in">
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-              <span style={{ fontSize: 22 }}>{template.icon}</span>
-              <h1 style={{ fontSize: 26, fontWeight: 600, fontFamily: "'Sora', sans-serif", color: "#e2e8f0" }}>{template.name}</h1>
-            </div>
-            <p style={{ fontSize: 15, color: "#4a5568", marginBottom: 36 }}>Dump your raw notes — AI will polish them.</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-              {template.fields.map((f, idx) => (
-                <div key={f.key}>
-                  <label style={{ fontSize: 13, color: "#64748b", fontWeight: 500, display: "block", marginBottom: 8 }}>
-                    {f.label} {idx === 0 && <span style={{ color: "#6366f1" }}>*</span>}
-                  </label>
-                  <textarea className="input-field" placeholder={f.placeholder} value={formData[f.key] || ""} onChange={e => handleFieldChange(f.key, e.target.value)} rows={3} />
+          {/* STEP 1 — Choose template */}
+          {step === 1 && (
+            <div className="fade-in">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                <div>
+                  <h1 style={{ fontSize: 26, fontWeight: 600, fontFamily: "'Sora', sans-serif", color: "#e2e8f0" }}>Choose a template</h1>
+                  <p style={{ fontSize: 15, color: "#cbd5e1", marginTop: 6 }}>Pick the format that fits today's update.</p>
                 </div>
-              ))}
-            </div>
-            {status === "error" && <div className="error-box" style={{ marginTop: 18 }}><p style={{ fontSize: 13, color: "#f87171" }}>⚠ {errorMsg}</p></div>}
-            <div style={{ marginTop: 32, display: "flex", justifyContent: "space-between" }}>
-              <button className="btn-ghost" onClick={() => { setStep(1); setStatus(null); }}>← Back</button>
-              <button className="btn-primary" disabled={!formData[template.fields[0].key] || status === "refining"} onClick={refineWithGroq}>
-                {status === "refining" ? <span className="pulse">Refining with AI...</span> : "Refine with AI →"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 3 */}
-        {step === 3 && (
-          <div className="fade-in">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-              <h1 style={{ fontSize: 26, fontWeight: 600, fontFamily: "'Sora', sans-serif", color: "#e2e8f0" }}>Review & Send</h1>
-              <button className="btn-outline-accent" onClick={() => setShowPreview(true)}>Preview ↗</button>
-            </div>
-            <p style={{ fontSize: 15, color: "#4a5568", marginBottom: 28 }}>Edit if needed, then send it off.</p>
-
-            <div style={{ marginBottom: 22 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <label style={{ fontSize: 13, color: "#64748b", fontWeight: 500 }}>Refined Update</label>
-                <span style={{ fontSize: 12, color: "#2a2d40" }}>{refinedContent.length} chars</span>
-              </div>
-              <textarea className="input-field" value={refinedContent} onChange={e => setRefinedContent(e.target.value)} rows={7} style={{ lineHeight: 1.8, color: "#94a3b8", fontSize: 14 }} />
-            </div>
-
-            {/* Recipients */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 18 }}>
-              <EmailChipInput label={<>To <span style={{ color: "#6366f1" }}>*</span></>} chips={toEmails} onChange={setToEmails} placeholder="Add recipient emails..." />
-
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn-ghost" onClick={() => setShowCcBcc(!showCcBcc)} style={{ fontSize: 12, padding: "6px 14px" }}>
-                  {showCcBcc ? "Hide" : "+"} CC / BCC
+                <button className="btn-outline-accent" onClick={() => setShowTemplateBuilder(true)} style={{ flexShrink: 0, marginLeft: 16 }}>
+                  + New Template
                 </button>
               </div>
 
-              {showCcBcc && (
+              <p className="section-label" style={{ margin: "28px 0 12px" }}>Built-in</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {DEFAULT_TEMPLATES.map(t => (
+                  <div key={t.id} className={`template-card ${selectedTemplate === t.id ? "active" : ""}`} onClick={() => setSelectedTemplate(t.id)}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                          <span style={{ fontSize: 20 }}>{t.icon}</span>
+                          <span style={{ fontSize: 15, fontFamily: "'Sora', sans-serif", fontWeight: 500, color: selectedTemplate === t.id ? "#a5b4fc" : "#cbd5e1" }}>{t.name}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {t.fields.map(f => <span key={f.key} className="tag">{f.label}</span>)}
+                        </div>
+                      </div>
+                      <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, marginLeft: 20, border: `2px solid ${selectedTemplate === t.id ? accent : "#1e2235"}`, background: selectedTemplate === t.id ? accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s ease" }}>
+                        {selectedTemplate === t.id && <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>✓</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {customTemplates.length > 0 && (
                 <>
-                  <EmailChipInput label="CC" chips={ccEmails} onChange={setCcEmails} placeholder="Add CC emails..." />
-                  <EmailChipInput label="BCC" chips={bccEmails} onChange={setBccEmails} placeholder="Add BCC emails..." />
+                  <p className="section-label" style={{ margin: "24px 0 12px" }}>My Templates</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {customTemplates.map(t => (
+                      <div key={t.id} className={`template-card ${selectedTemplate === t.id ? "active" : ""}`} onClick={() => setSelectedTemplate(t.id)}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                              <span style={{ fontSize: 20 }}>{t.icon}</span>
+                              <span style={{ fontSize: 15, fontFamily: "'Sora', sans-serif", fontWeight: 500, color: selectedTemplate === t.id ? "#a5b4fc" : "#cbd5e1" }}>{t.name}</span>
+                              <span style={{ fontSize: 10, color: "#94a3b8", background: "#1a1a2e", border: "1px solid #2a2a42", borderRadius: 4, padding: "1px 7px" }}>custom</span>
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              {t.fields.map(f => <span key={f.key} className="tag">{f.label}</span>)}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: 16 }}>
+                            <button className="btn-danger" onClick={e => { e.stopPropagation(); deleteCustomTemplate(t.id); }}>Delete</button>
+                            <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, border: `2px solid ${selectedTemplate === t.id ? accent : "#1e2235"}`, background: selectedTemplate === t.id ? accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s ease" }}>
+                              {selectedTemplate === t.id && <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>✓</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </>
               )}
 
-              <div>
-                <label style={{ fontSize: 13, color: "#64748b", fontWeight: 500, display: "block", marginBottom: 8 }}>Subject</label>
-                <input className="input-field" type="text" placeholder={defaultSubject} value={subject} onChange={e => setSubject(e.target.value)} />
+              <div style={{ marginTop: 36, display: "flex", justifyContent: "flex-end" }}>
+                <button className="btn-primary" disabled={!selectedTemplate} onClick={() => setStep(2)}>Continue →</button>
               </div>
             </div>
+          )}
 
-            {status === "error" && <div className="error-box" style={{ marginBottom: 18 }}><p style={{ fontSize: 13, color: "#f87171" }}>⚠ {errorMsg}</p></div>}
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <button className="btn-ghost" onClick={() => { setStep(2); setStatus("refined"); }}>← Back</button>
-              <div style={{ display: "flex", gap: 10 }}>
-                <button className="btn-ghost" onClick={() => setShowPreview(true)} style={{ fontSize: 13 }}>Preview</button>
-                <button className="btn-primary" disabled={toEmails.length === 0 || status === "sending"} onClick={sendViaWebhook}>
-                  {status === "sending" ? <span className="pulse">Sending...</span> : `Send to ${toEmails.length > 0 ? toEmails.length : ""} ${toEmails.length === 1 ? "recipient" : toEmails.length > 1 ? "recipients" : "..."} →`}
+          {/* STEP 2 — Fill fields */}
+          {step === 2 && template && (
+            <div className="fade-in">
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                <span style={{ fontSize: 22 }}>{template.icon}</span>
+                <h1 style={{ fontSize: 26, fontWeight: 600, fontFamily: "'Sora', sans-serif", color: "#e2e8f0" }}>{template.name}</h1>
+              </div>
+              <p style={{ fontSize: 15, color: "#cbd5e1", marginBottom: 36 }}>Dump your raw notes — AI will polish them.</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+                {template.fields.map((f, idx) => (
+                  <div key={f.key}>
+                    <label style={{ fontSize: 13, color: "#cbd5e1", fontWeight: 600, display: "block", marginBottom: 8 }}>
+                      {f.label} {idx === 0 && <span style={{ color: "#6366f1" }}>*</span>}
+                    </label>
+                    <textarea className="input-field" placeholder={f.placeholder} value={formData[f.key] || ""} onChange={e => handleFieldChange(f.key, e.target.value)} rows={3} />
+                  </div>
+                ))}
+              </div>
+              {status === "error" && <div className="error-box" style={{ marginTop: 18 }}><p style={{ fontSize: 13, color: "#f87171" }}>⚠ {errorMsg}</p></div>}
+              <div style={{ marginTop: 32, display: "flex", justifyContent: "space-between" }}>
+                <button className="btn-ghost" onClick={() => { setStep(1); setStatus(null); }}>← Back</button>
+                <button className="btn-primary" disabled={!formData[template.fields[0].key] || status === "refining"} onClick={refineWithGroq}>
+                  {status === "refining" ? <span className="pulse">Refining with AI...</span> : "Refine with AI →"}
                 </button>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* STEP 4 */}
-        {step === 4 && (
-          <div className="fade-in" style={{ textAlign: "center", padding: "56px 0" }}>
-            <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#1e1b4b", border: "1.5px solid #3730a3", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 28px", fontSize: 30, boxShadow: "0 0 32px rgba(99,102,241,0.2)" }}>✉</div>
-            <h1 style={{ fontSize: 28, fontWeight: 600, fontFamily: "'Sora', sans-serif", marginBottom: 12, color: "#a5b4fc" }}>Update Sent!</h1>
-            <p style={{ fontSize: 15, color: "#4a5568", marginBottom: 6 }}>
-              Delivered to <span style={{ color: "#6366f1" }}>{toEmails.length} recipient{toEmails.length !== 1 ? "s" : ""}</span>
-              {ccEmails.length > 0 && <span style={{ color: "#4a5568" }}> · {ccEmails.length} CC</span>}
-              {bccEmails.length > 0 && <span style={{ color: "#4a5568" }}> · {bccEmails.length} BCC</span>}
-            </p>
-            <p style={{ fontSize: 13, color: "#2a2d40", marginBottom: 48 }}>
-              {new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} · {template?.name} template
-            </p>
-            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-              <button className="btn-ghost" onClick={() => { setStep(3); setStatus("sent"); }}>View Details</button>
-              <button className="btn-primary" onClick={reset}>Send Another →</button>
+          {/* STEP 3 — Review & send */}
+          {step === 3 && (
+            <div className="fade-in">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                <h1 style={{ fontSize: 26, fontWeight: 600, fontFamily: "'Sora', sans-serif", color: "#e2e8f0" }}>Review & Send</h1>
+                <button className="btn-outline-accent" onClick={() => setShowPreview(true)}>Preview ↗</button>
+              </div>
+              <p style={{ fontSize: 15, color: "#cbd5e1", marginBottom: 28 }}>Edit if needed, then send it off.</p>
+
+              <div style={{ marginBottom: 22 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <label style={{ fontSize: 13, color: "#cbd5e1", fontWeight: 600 }}>Refined Update</label>
+                  <span style={{ fontSize: 12, color: "#94a3b8" }}>{refinedContent.length} chars</span>
+                </div>
+                <textarea className="input-field" value={refinedContent} onChange={e => setRefinedContent(e.target.value)} rows={7} style={{ lineHeight: 1.8, color: "#cbd5e1", fontSize: 14 }} />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 18 }}>
+                <EmailChipInput label={<>To <span style={{ color: "#6366f1" }}>*</span></>} chips={toEmails} onChange={setToEmails} placeholder="Add recipient emails..." />
+
+                <div>
+                  <button className="btn-ghost" onClick={() => setShowCcBcc(!showCcBcc)} style={{ fontSize: 12, padding: "6px 14px" }}>
+                    {showCcBcc ? "Hide CC / BCC" : "+ CC / BCC"}
+                  </button>
+                </div>
+
+                {showCcBcc && (
+                  <>
+                    <EmailChipInput label="CC" chips={ccEmails} onChange={setCcEmails} placeholder="Add CC emails..." />
+                    <EmailChipInput label="BCC" chips={bccEmails} onChange={setBccEmails} placeholder="Add BCC emails..." />
+                  </>
+                )}
+
+                <div>
+                  <label style={{ fontSize: 13, color: "#cbd5e1", fontWeight: 600, display: "block", marginBottom: 8 }}>Subject</label>
+                  <input className="input-field" type="text" placeholder={defaultSubject} value={subject} onChange={e => setSubject(e.target.value)} />
+                </div>
+              </div>
+
+              {status === "error" && <div className="error-box" style={{ marginBottom: 18 }}><p style={{ fontSize: 13, color: "#f87171" }}>⚠ {errorMsg}</p></div>}
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button className="btn-ghost" onClick={() => { setStep(2); setStatus("refined"); }}>← Back</button>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button className="btn-ghost" onClick={() => setShowPreview(true)} style={{ fontSize: 13 }}>Preview</button>
+                  <button className="btn-primary" disabled={toEmails.length === 0 || status === "sending"} onClick={sendEmail}>
+                    {status === "sending"
+                      ? <span className="pulse">Sending...</span>
+                      : `Send to ${toEmails.length > 0 ? toEmails.length : ""} ${toEmails.length === 1 ? "recipient" : toEmails.length > 1 ? "recipients" : "..."} →`}
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+
+          {/* STEP 4 — Done */}
+          {step === 4 && (
+            <div className="fade-in" style={{ textAlign: "center", padding: "56px 0" }}>
+              <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#1e1b4b", border: "1.5px solid #3730a3", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 28px", fontSize: 30, boxShadow: "0 0 32px rgba(99,102,241,0.2)" }}>✉</div>
+              <h1 style={{ fontSize: 28, fontWeight: 600, fontFamily: "'Sora', sans-serif", marginBottom: 12, color: "#a5b4fc" }}>Update Sent!</h1>
+              <p style={{ fontSize: 15, color: "#cbd5e1", marginBottom: 6 }}>
+                Delivered to <span style={{ color: "#6366f1" }}>{toEmails.length} recipient{toEmails.length !== 1 ? "s" : ""}</span>
+                {ccEmails.length > 0 && <span style={{ color: "#94a3b8" }}> · {ccEmails.length} CC</span>}
+                {bccEmails.length > 0 && <span style={{ color: "#94a3b8" }}> · {bccEmails.length} BCC</span>}
+              </p>
+              <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 48 }}>
+                {new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} · {template?.name} template
+              </p>
+              <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                <button className="btn-ghost" onClick={() => { setStep(3); setStatus("sent"); }}>View Details</button>
+                <button className="btn-primary" onClick={reset}>Send Another →</button>
+              </div>
+            </div>
+          )}
+        </main>
+      )}
     </div>
   );
 }
