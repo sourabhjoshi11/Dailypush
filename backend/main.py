@@ -18,9 +18,9 @@ app = FastAPI(title="DailyPush API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://dailypush-seven.vercel.app",  # your Vercel frontend
-        "http://localhost:5173",                # local dev (Vite default)
-        "http://localhost:3000",                # local dev (CRA)
+        "https://dailypush-seven.vercel.app",  
+        "http://localhost:5173",                
+        "http://localhost:3000",            
     ],
     allow_credentials=True,
     allow_methods=["*"],
