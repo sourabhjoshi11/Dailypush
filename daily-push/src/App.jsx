@@ -217,64 +217,37 @@ const MenuDots = ({ onEdit, onDelete }) => {
   );
 };
 
+// Simple email chip input used in the compose view
 const EmailInput = ({ label, chips, onChange, placeholder }) => {
   const [input, setInput] = useState("");
-  const [focused, setFocused] = useState(false);
-  const inputRef = useRef();
-  
   const addChip = (val) => {
-    const emails = val.split(/[,;\s]+/).map(e => e.trim()).filter(e => e && e.includes("@"));
-    if (emails.length) onChange([...chips, ...emails.filter(e => !chips.includes(e))]);
+    const emails = String(val || "").split(/[,;\s]+/).map(e => e.trim()).filter(e => e && e.includes("@"));
+    if (emails.length) onChange([...(chips || []), ...emails.filter(e => !(chips || []).includes(e))]);
     setInput("");
   };
-  
+  const removeChip = (i) => onChange((chips || []).filter((_, idx) => idx !== i));
+
   return (
     <div>
-      <label style={{ fontSize: 12, color: '#a1a1aa', fontWeight: 600, display: 'block', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</label>
-      <div
-        onClick={() => inputRef.current?.focus()}
-        style={{
-          ...styles.input,
-          padding: '10px 14px',
-          minHeight: 48,
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 8,
-          alignItems: 'center',
-          cursor: 'text',
-          ...(focused ? styles.inputFocus : {}),
-        }}
-      >
-        {chips.map((chip, i) => (
-          <span key={i} style={{
-            background: 'rgba(99, 102, 241, 0.15)',
-            border: '1px solid rgba(99, 102, 241, 0.3)',
-            borderRadius: 6, padding: '3px 10px',
-            fontSize: 13, color: '#a5b4fc',
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            {chip}
-            <button onClick={() => onChange(chips.filter((_, idx) => idx !== i))}
-              style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 16, padding: 0, lineHeight: 1 }}>
-              ×
-            </button>
+      <label style={{ fontSize: 12, color: '#a1a1aa', fontWeight: 600, display: 'block', marginBottom: 8 }}>{label}</label>
+      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10, minHeight: 48, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }} onClick={e => e.currentTarget.querySelector('input')?.focus()}>
+        {(chips || []).map((c, i) => (
+          <span key={i} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 6, padding: '6px 8px', fontSize: 13, color: '#fafafa', display: 'flex', alignItems: 'center', gap: 8 }}>
+            {c}
+            <button onClick={() => removeChip(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
           </span>
         ))}
         <input
-          ref={inputRef}
           value={input}
           onChange={e => setInput(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => { setFocused(false); if (input) addChip(input); }}
-          onKeyDown={e => {
-            if (['Enter', ',', ';', 'Tab'].includes(e.key)) { e.preventDefault(); addChip(input); }
-            if (e.key === 'Backspace' && !input && chips.length) onChange(chips.slice(0, -1));
-          }}
+          onKeyDown={e => { if (['Enter', ',', ';', 'Tab'].includes(e.key)) { e.preventDefault(); addChip(input); } if (e.key === 'Backspace' && !input && (chips || []).length) removeChip((chips || []).length - 1); }}
+          onBlur={() => input && addChip(input)}
           onPaste={e => { e.preventDefault(); addChip(e.clipboardData.getData('text')); }}
-          placeholder={chips.length === 0 ? placeholder : ''}
+          placeholder={(chips || []).length === 0 ? placeholder : ''}
           style={{ border: 'none', outline: 'none', background: 'transparent', color: '#fafafa', fontSize: 14, flex: 1, minWidth: 140, fontFamily: "'Inter', sans-serif" }}
         />
       </div>
+      <p style={{ fontSize: 12, color: '#71717a', marginTop: 8 }}>Type and press Enter or comma. Paste multiple emails at once.</p>
     </div>
   );
 };
