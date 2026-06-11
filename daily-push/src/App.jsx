@@ -170,22 +170,33 @@ export default function App() {
   const [tbParsed, setTbParsed] = useState(false);
 
   const parseTemplate = (raw) => {
-    const lines = raw.split("\n").map(l => l.trim()).filter(Boolean);
+    // Normalize line endings (handles \r\n from Windows/paste)
+    const lines = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").map(l => l.trim()).filter(Boolean);
     const fields = [];
+    const seenKeys = new Set();
     lines.forEach(line => {
-      const match = line.match(/^(.+?)\s*:\s*(.*)$/);
-      if (match) {
-        const label = match[1].trim();
-        const key = label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-        if (label && key) fields.push({ key, label, placeholder: match[2].trim() || "" });
-      }
+      // Match "Label :" or "Label : hint text" — colon required
+      const colonIdx = line.indexOf(":");
+      if (colonIdx < 1) return; // no colon or colon at start
+      const label = line.slice(0, colonIdx).trim();
+      const placeholder = line.slice(colonIdx + 1).trim();
+      if (!label) return;
+      let key = label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+      if (!key) return;
+      // Deduplicate keys
+      if (seenKeys.has(key)) key = `${key}_${seenKeys.size}`;
+      seenKeys.add(key);
+      fields.push({ key, label, placeholder });
     });
     return fields;
   };
 
   const tbParse = () => {
     const fields = parseTemplate(tb.rawText);
-    if (!fields.length) return;
+    if (!fields.length) {
+      alert("No fields detected. Make sure each line has a colon, e.g.:\nField Name :\nProject Status :");
+      return;
+    }
     const vars = fields.map(f => `${f.label}: {{${f.key}}}`).join("\n");
     const prompt = `Refine this ${tb.name || "update"} into a concise, professional format.\n\n${vars}`;
     setTb(p => ({ ...p, fields, aiPrompt: prompt }));
