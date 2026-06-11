@@ -122,7 +122,7 @@ const styles = {
   
   buttonSecondary: {
     background: 'rgba(255, 255, 255, 0.05)',
-    color: '#a1a1aa',
+    color: '#cbd5e1',
     border: '1px solid rgba(255, 255, 255, 0.08)',
     padding: '12px 24px',
     borderRadius: 12,
@@ -144,18 +144,18 @@ const styles = {
   
   subtitle: {
     fontSize: 14,
-    color: '#71717a',
+    color: '#9ca3af',
     lineHeight: 1.6,
   },
   
   // Tags
   tag: {
-    background: 'rgba(255, 255, 255, 0.05)',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    background: 'rgba(255, 255, 255, 0.07)',
+    border: '1px solid rgba(255, 255, 255, 0.10)',
     borderRadius: 6,
     padding: '4px 10px',
     fontSize: 12,
-    color: '#a1a1aa',
+    color: '#cbd5e1',
   },
 };
 
@@ -184,7 +184,7 @@ const MenuDots = ({ onEdit, onDelete }) => {
           transition: 'all 0.2s',
         }}
         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#fafafa'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#71717a'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9ca3af'; }}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
           <circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="12" cy="8" r="1.5"/>
@@ -229,7 +229,7 @@ const EmailInput = ({ label, chips, onChange, placeholder }) => {
 
   return (
     <div>
-      <label style={{ fontSize: 12, color: '#a1a1aa', fontWeight: 600, display: 'block', marginBottom: 8 }}>{label}</label>
+      <label style={{ fontSize: 12, color: '#cbd5e1', fontWeight: 600, display: 'block', marginBottom: 8 }}>{label}</label>
       <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10, minHeight: 48, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }} onClick={e => e.currentTarget.querySelector('input')?.focus()}>
         {(chips || []).map((c, i) => (
           <span key={i} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 6, padding: '6px 8px', fontSize: 13, color: '#fafafa', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -247,7 +247,7 @@ const EmailInput = ({ label, chips, onChange, placeholder }) => {
           style={{ border: 'none', outline: 'none', background: 'transparent', color: '#fafafa', fontSize: 14, flex: 1, minWidth: 140, fontFamily: "'Inter', sans-serif" }}
         />
       </div>
-      <p style={{ fontSize: 12, color: '#71717a', marginTop: 8 }}>Type and press Enter or comma. Paste multiple emails at once.</p>
+      <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>Type and press Enter or comma. Paste multiple emails at once.</p>
     </div>
   );
 };
@@ -258,7 +258,7 @@ const EmptyState = ({ icon, title, description }) => (
       {icon}
     </div>
     <h3 style={{ fontSize: 18, color: '#d4d4d8', marginBottom: 8, fontWeight: 500 }}>{title}</h3>
-    <p style={{ fontSize: 14, color: '#71717a' }}>{description}</p>
+    <p style={{ fontSize: 14, color: '#9ca3af' }}>{description}</p>
   </div>
 );
 
@@ -303,12 +303,12 @@ const HistoryPage = ({ apiUrl, user }) => {
       <div style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1 style={{ fontSize: 32, fontWeight: 600, color: '#fafafa', marginBottom: 8, letterSpacing: '-0.02em' }}>Email History</h1>
-          <p style={{ fontSize: 14, color: '#71717a' }}>
+          <p style={{ fontSize: 14, color: '#9ca3af' }}>
             {emails.length > 0 ? `${emails.length} update${emails.length !== 1 ? 's' : ''} from the last 5 days` : 'Track your sent updates'}
           </p>
         </div>
         {emails.length > 0 && (
-          <div style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, fontSize: 12, color: '#a1a1aa' }}>
+          <div style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, fontSize: 12, color: '#cbd5e1' }}>
             Last 5 days
           </div>
         )}
@@ -316,7 +316,7 @@ const HistoryPage = ({ apiUrl, user }) => {
 
       {emails.length === 0 ? (
         <EmptyState 
-          icon={<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#52525b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>}
+          icon={<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>}
           title="No emails yet"
           description="Your sent updates will appear here once you start sending."
         />
@@ -374,7 +374,7 @@ const HistoryPage = ({ apiUrl, user }) => {
                       )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                      <span style={{ fontSize: 12, color: '#71717a' }}>
+                      <span style={{ fontSize: 12, color: '#9ca3af' }}>
                         To: {email.to_emails?.slice(0, 2).join(', ')}{email.to_emails?.length > 2 ? ` +${email.to_emails.length - 2}` : ''}
                       </span>
                     </div>
@@ -382,9 +382,9 @@ const HistoryPage = ({ apiUrl, user }) => {
                   
                   {/* Right side */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
-                    <span style={{ fontSize: 12, color: '#52525b' }}>{formatDate(email.created_at)}</span>
+                    <span style={{ fontSize: 12, color: '#94a3b8' }}>{formatDate(email.created_at)}</span>
                     <svg 
-                      width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#52525b" strokeWidth="2"
+                      width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"
                       style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
                     >
                       <polyline points="6 9 12 15 18 9"/>
@@ -403,7 +403,7 @@ const HistoryPage = ({ apiUrl, user }) => {
                         { label: 'BCC', list: email.bcc_emails },
                       ].filter(g => g.list?.length > 0).map(group => (
                         <div key={group.label}>
-                          <div style={{ fontSize: 11, color: '#71717a', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                          <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
                             {group.label}
                           </div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -422,7 +422,7 @@ const HistoryPage = ({ apiUrl, user }) => {
                       borderRadius: 12,
                       padding: '20px 24px',
                     }}>
-                      <div style={{ fontSize: 11, color: '#71717a', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                      <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
                         Message Content
                       </div>
                       <div style={{ fontSize: 14, color: '#d4d4d8', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
@@ -433,7 +433,7 @@ const HistoryPage = ({ apiUrl, user }) => {
                     {/* Footer */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                        <span style={{ fontSize: 12, color: '#71717a' }}>
+                        <span style={{ fontSize: 12, color: '#9ca3af' }}>
                           Sent by <span style={{ color: '#d4d4d8' }}>{user?.email}</span>
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -443,7 +443,7 @@ const HistoryPage = ({ apiUrl, user }) => {
                           </span>
                         </div>
                       </div>
-                      <span style={{ fontSize: 12, color: '#52525b' }}>{formatDate(email.created_at)}</span>
+                      <span style={{ fontSize: 12, color: '#94a3b8' }}>{formatDate(email.created_at)}</span>
                     </div>
                   </div>
                 )}
@@ -589,7 +589,7 @@ export default function App() {
           <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
             <Spinner />
           </div>
-          <p style={{ fontSize: 14, color: '#71717a' }}>Loading your workspace...</p>
+          <p style={{ fontSize: 14, color: '#9ca3af' }}>Loading your workspace...</p>
         </div>
       </div>
     );
@@ -620,7 +620,7 @@ export default function App() {
           <h1 style={{ fontSize: 36, fontWeight: 700, color: '#fafafa', marginBottom: 12, letterSpacing: '-0.03em' }}>
             Daily Push
           </h1>
-          <p style={{ fontSize: 16, color: '#a1a1aa', lineHeight: 1.7, marginBottom: 48 }}>
+          <p style={{ fontSize: 16, color: '#cbd5e1', lineHeight: 1.7, marginBottom: 48 }}>
             AI-powered daily updates. Write, refine, and send professional updates from your Gmail in seconds.
           </p>
           
@@ -645,7 +645,7 @@ export default function App() {
             </svg>
             Continue with Google
           </a>
-          <p style={{ fontSize: 13, color: '#52525b', marginTop: 24 }}>
+          <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 24 }}>
             No password needed · Sends directly from your Gmail
           </p>
         </div>
@@ -682,7 +682,7 @@ export default function App() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
-        input::placeholder, textarea::placeholder { color: #52525b; }
+        input::placeholder, textarea::placeholder { color: #94a3b8; }
       `}</style>
 
       {/* Header */}
