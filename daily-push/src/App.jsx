@@ -930,28 +930,20 @@ export default function App() {
                         <div key={t.id} onClick={() => selectTemplate(t.id)} style={{
                           ...styles.glass, padding: '20px 24px', cursor: 'pointer',
                           transition: 'all 0.3s ease', position: 'relative',
+                          borderLeft: `3px solid ${t.color || '#6366f1'}`,
                         }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.3)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
                         >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                                <h3 style={{ fontSize: 15, fontWeight: 600, color: '#fafafa' }}>{t.name}</h3>
-                                <span style={{ fontSize: 10, color: '#a5b4fc', background: 'rgba(99,102,241,0.15)', padding: '2px 8px', borderRadius: 4 }}>
-                                  Custom
-                                </span>
-                              </div>
-                              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                {t.fields.map(f => (
-                                  <span key={f.key} style={styles.tag}>{f.label}</span>
-                                ))}
-                              </div>
-                            </div>
-                            <div onClick={e => e.stopPropagation()}>
-                              <MenuDots onEdit={() => { setEditingTemplate(t); setTb({ name:t.name, rawText:t.rawText||"", fields:t.fields, aiPrompt:t.aiPrompt }); setTbParsed(true); setShowTemplateBuilder(true); }}
-                                onDelete={() => deleteTemplate(t.id)} />
-                            </div>
+                          <h3 style={{ fontSize: 15, fontWeight: 600, color: '#fafafa', marginBottom: 12 }}>{t.name}</h3>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {t.fields.map(f => (
+                              <span key={f.key} style={styles.tag}>{f.label}</span>
+                            ))}
+                          </div>
+                          <div style={{ position: 'absolute', top: 12, right: 12 }} onClick={e => e.stopPropagation()}>
+                            <MenuDots onEdit={() => { setEditingTemplate(t); setTb({ name:t.name, rawText:t.rawText||"", fields:t.fields, aiPrompt:t.aiPrompt }); setTbParsed(true); setShowTemplateBuilder(true); }}
+                              onDelete={() => deleteTemplate(t.id)} />
                           </div>
                         </div>
                       ))}
