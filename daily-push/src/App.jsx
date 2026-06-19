@@ -467,6 +467,7 @@ export default function App() {
   const [isPrompting, setIsPrompting] = useState(false);
   const [isReleasingMic, setIsReleasingMic] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [debugAudioUrl, setDebugAudioUrl] = useState(null);
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
   const [toEmails, setToEmails] = useState([]);
@@ -664,6 +665,9 @@ export default function App() {
           const fieldKey = fieldKeyAtStart;
           if (!fieldKey) return;
           const blob = new Blob(audioChunks.current, { type: 'audio/webm' });
+          const audioUrl = URL.createObjectURL(blob);
+          setDebugAudioUrl(audioUrl);
+          console.log('Recorded blob size:', blob.size, 'bytes');
           const body = new FormData();
           body.append('file', blob, `${fieldKey}.webm`);
 
@@ -1237,6 +1241,10 @@ export default function App() {
                         {isPrompting ? 'Waiting for prompt to finish...' : isReleasingMic ? 'Resetting microphone...' : isRecording ? 'Recording...' : transcribing ? 'Transcribing...' : 'Ready to capture audio.'}
                       </div>
                     </div>
+
+                    {debugAudioUrl && (
+                      <audio controls src={debugAudioUrl} style={{ width: '100%', marginTop: 12 }} />
+                    )}
 
                     <textarea
                       style={{ ...styles.input, resize: 'vertical', lineHeight: 1.8, minHeight: 140, marginTop: 18 }}
