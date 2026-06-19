@@ -189,12 +189,17 @@ async def transcribe_audio(file: UploadFile = File(...), user=Depends(get_curren
 
     try:
         async with httpx.AsyncClient() as client:
+            file_bytes = await file.read()
             files = {
-                "file": (file.filename, await file.read(), file.content_type or "application/octet-stream")
+                "file": (file.filename, file_bytes, file.content_type or "application/octet-stream")
+            }
+            data = {
+                "model": "whisper-large-v3-turbo"
             }
             res = await client.post(
                 "https://api.groq.com/openai/v1/audio/transcriptions",
                 headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                data=data,
                 files=files,
                 timeout=60,
             )
