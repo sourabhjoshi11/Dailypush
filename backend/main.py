@@ -194,7 +194,11 @@ async def transcribe_audio(file: UploadFile = File(...), user=Depends(get_curren
                 "file": (file.filename, file_bytes, file.content_type or "application/octet-stream")
             }
             data = {
-                "model": "whisper-large-v3-turbo"
+                "model": "whisper-large-v3",
+                "language": "en",
+                "prompt": "This is a professional work update. It may include names, project names, and technical terms like Sourabh, MOM, blockers, dependencies.",
+                "temperature": "0",
+                "response_format": "json",
             }
             res = await client.post(
                 "https://api.groq.com/openai/v1/audio/transcriptions",
