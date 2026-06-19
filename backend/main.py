@@ -427,7 +427,7 @@ def preview_timesheet(user=Depends(get_current_user)):
     res = supabase.table("timesheet_entries") \
         .select("entry_date,task_text") \
         .eq("user_id", user["sub"]) \
-        .order("entry_date", asc=True) \
+        .order("entry_date", desc=False) \
         .execute()
     return res.data or []
 
@@ -474,7 +474,7 @@ def download_timesheet(user=Depends(get_current_user)):
     entries = supabase.table("timesheet_entries") \
         .select("entry_date,task_text") \
         .eq("user_id", user["sub"]) \
-        .order("entry_date", asc=True) \
+        .order("entry_date", desc=False) \
         .execute()
 
     for entry in entries.data or []:
