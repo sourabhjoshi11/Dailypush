@@ -464,6 +464,7 @@ export default function App() {
   const [voiceMode, setVoiceMode] = useState(false);
   const [currentFieldIndex, setCurrentFieldIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [isPrompting, setIsPrompting] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
@@ -561,9 +562,15 @@ export default function App() {
     const field = template.fields[currentFieldIndex];
     if (!field) return;
     window.speechSynthesis.cancel();
+    setIsPrompting(true);
     const utterance = new SpeechSynthesisUtterance(field.label);
+    utterance.onend = () => setIsPrompting(false);
+    utterance.onerror = () => setIsPrompting(false);
     window.speechSynthesis.speak(utterance);
-    return () => window.speechSynthesis.cancel();
+    return () => {
+      window.speechSynthesis.cancel();
+      setIsPrompting(false);
+    };
   }, [voiceMode, currentFieldIndex, template]);
 
   const stopRecording = () => {
@@ -616,6 +623,12 @@ export default function App() {
       setErrorMsg("Microphone access is not available in this browser.");
       setStatus("error");
       return;
+    }
+
+    if (window.speechSynthesis.speaking || isPrompting) {
+      window.speechSynthesis.cancel();
+      setIsPrompting(false);
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     try {
@@ -1190,16 +1203,19 @@ export default function App() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 22 }}>
                       <button
                         onClick={isRecording ? stopRecording : startRecording}
+                        disabled={isPrompting || transcribing}
                         style={{
                           ...styles.buttonPrimary,
                           minWidth: 150,
                           background: isRecording ? '#ef4444' : '#6366f1',
+                          opacity: (isPrompting || transcribing) ? 0.5 : 1,
+                          cursor: (isPrompting || transcribing) ? 'not-allowed' : 'pointer',
                         }}
                       >
                         {isRecording ? '⏹ Stop' : '🎤 Record'}
                       </button>
                       <div style={{ fontSize: 13, color: '#94a3af' }}>
-                        {isRecording ? 'Recording...' : transcribing ? 'Transcribing...' : 'Ready to capture audio.'}
+                        {isPrompting ? 'Waiting for prompt to finish...' : isRecording ? 'Recording...' : transcribing ? 'Transcribing...' : 'Ready to capture audio.'}
                       </div>
                     </div>
 
