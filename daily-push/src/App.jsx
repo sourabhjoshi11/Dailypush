@@ -276,10 +276,38 @@ const Spinner = () => (
 // ── History Page ───────────────────────────────────────────────────
 const TimesheetPage = ({ apiUrl }) => {
   const [selectedFile, setSelectedFile] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [entries, setEntries] = useState([]);
+  const [expandedDate, setExpandedDate] = useState(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const fileInputRef = useRef(null);
+
+  const fetchPreview = async () => {
+    setPreviewLoading(true);
+    setErrorMessage("");
+    try {
+      const token = localStorage.getItem('dp_token');
+      const res = await fetch(`${apiUrl}/timesheet/preview`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail || res.statusText || 'Failed to load timesheet preview');
+      }
+      const data = await res.json();
+      setEntries(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setErrorMessage(error.message || 'Unable to load timesheet preview.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPreview();
+  }, [apiUrl]);
 
   const handleFileSelect = (file) => {
     setSelectedFile(file);
@@ -298,7 +326,7 @@ const TimesheetPage = ({ apiUrl }) => {
 
   const handleSubmit = async () => {
     if (!selectedFile) return;
-    setLoading(true);
+    setUploadLoading(true);
     setErrorMessage("");
     setSuccessMessage("");
 
@@ -307,7 +335,7 @@ const TimesheetPage = ({ apiUrl }) => {
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      const res = await fetch(`${apiUrl}/timesheet/fill`, {
+      const res = await fetch(`${apiUrl}/timesheet/upload`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -317,13 +345,36 @@ const TimesheetPage = ({ apiUrl }) => {
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(body?.detail || res.statusText || 'Failed to fill timesheet');
+        throw new Error(body?.detail || res.statusText || 'Failed to upload timesheet template');
       }
 
+      const data = await res.json();
+      setSuccessMessage(`Backfilled ${data.filled} of ${data.total_days} days`);
+      clearFile();
+      await fetchPreview();
+    } catch (error) {
+      setErrorMessage(error.message || 'Unable to upload timesheet template.');
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const token = localStorage.getItem('dp_token');
+      const res = await fetch(`${apiUrl}/timesheet/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail || res.statusText || 'Failed to download timesheet');
+      }
       const blob = await res.blob();
       const disposition = res.headers.get('Content-Disposition');
       const filenameMatch = disposition && disposition.match(/filename="?(.+?)"?$/);
-      const filename = filenameMatch ? filenameMatch[1] : 'Timesheet_Filled.xlsx';
+      const filename = filenameMatch ? filenameMatch[1] : 'Timesheet_Current.xlsx';
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -332,17 +383,23 @@ const TimesheetPage = ({ apiUrl }) => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-
       setSuccessMessage('Timesheet downloaded! Check your downloads folder.');
     } catch (error) {
-      setErrorMessage(error.message || 'Unable to fill timesheet.');
-    } finally {
-      setLoading(false);
+      setErrorMessage(error.message || 'Unable to download timesheet.');
+    }
+  };
+
+  const formatEntryDate = (value) => {
+    try {
+      const d = new Date(value);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } catch {
+      return value;
     }
   };
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '60px 24px' }}>
+    <div style={{ maxWidth: 780, margin: '0 auto', padding: '60px 24px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div>
           <h1 style={styles.heading}>Monthly Timesheet</h1>
@@ -398,22 +455,78 @@ const TimesheetPage = ({ apiUrl }) => {
           </div>
         )}
 
-        <button
-          onClick={handleSubmit}
-          disabled={!selectedFile || loading}
-          style={{
-            ...styles.buttonPrimary,
-            opacity: (!selectedFile || loading) ? 0.6 : 1,
-            cursor: (!selectedFile || loading) ? 'not-allowed' : 'pointer',
-            width: 'fit-content',
-          }}
-        >
-          {loading ? (
-            <><Spinner /> Filling timesheet...</>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+          <button
+            onClick={handleSubmit}
+            disabled={!selectedFile || uploadLoading}
+            style={{
+              ...styles.buttonPrimary,
+              opacity: (!selectedFile || uploadLoading) ? 0.6 : 1,
+              cursor: (!selectedFile || uploadLoading) ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {uploadLoading ? <><Spinner /> Uploading...</> : 'Upload Template & Backfill'}
+          </button>
+          <button
+            onClick={handleDownload}
+            disabled={!entries.length}
+            style={{
+              ...styles.buttonPrimary,
+              background: entries.length ? styles.buttonPrimary.background : 'rgba(99,102,241,0.4)',
+              cursor: entries.length ? 'pointer' : 'not-allowed',
+            }}
+          >
+            Download Current Timesheet
+          </button>
+        </div>
+
+        <div style={{ ...styles.glass, padding: 24, marginTop: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <div>
+              <h2 style={{ fontSize: 20, fontWeight: 600, color: '#fafafa', marginBottom: 4 }}>This Month's Progress</h2>
+              <p style={{ fontSize: 13, color: '#9ca3af' }}>Review filled entries from your uploaded template and daily updates.</p>
+            </div>
+            {previewLoading && <Spinner />}
+          </div>
+
+          {previewLoading ? (
+            <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Spinner />
+            </div>
+          ) : entries.length === 0 ? (
+            <EmptyState
+              icon={<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7h18"/><path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><rect x="3" y="7" width="18" height="14" rx="2"/></svg>}
+              title="No timesheet data yet"
+              description="No timesheet data yet — upload a template to get started, or just send your first daily update."
+            />
           ) : (
-            'Fill Timesheet'
+            <div style={{ display: 'grid', gap: 12 }}>
+              {entries.map((entry) => {
+                const isExpanded = expandedDate === entry.entry_date;
+                const previewText = entry.task_text?.length > 80 ? `${entry.task_text.slice(0, 80)}...` : entry.task_text;
+                return (
+                  <div key={entry.entry_date} style={{ ...styles.glass, padding: 18, cursor: 'pointer', border: isExpanded ? '1px solid rgba(99,102,241,0.5)' : '1px solid rgba(255,255,255,0.08)' }} onClick={() => setExpandedDate(isExpanded ? null : entry.entry_date)}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e', marginTop: 4 }} />
+                        <div>
+                          <div style={{ fontSize: 14, color: '#f8fafc', fontWeight: 600 }}>{formatEntryDate(entry.entry_date)}</div>
+                          <div style={{ fontSize: 13, color: '#94a3af', marginTop: 4 }}>{previewText}</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 18, color: '#94a3af', lineHeight: 1 }}>{isExpanded ? '▴' : '▾'}</div>
+                    </div>
+                    {isExpanded && (
+                      <div style={{ marginTop: 16, color: '#d4d4d8', lineHeight: 1.7, whiteSpace: 'pre-wrap', fontSize: 14 }}>
+                        {entry.task_text}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
-        </button>
+        </div>
       </div>
     </div>
   );
