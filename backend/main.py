@@ -13,6 +13,7 @@ import base64
 import io
 import re
 from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 import json
 
 load_dotenv()
@@ -22,9 +23,9 @@ app = FastAPI(title="DailyPush API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://dailypush-seven.vercel.app",  
-        "http://localhost:5173",                
-        "http://localhost:3000",            
+        "https://dailypush-seven.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -370,7 +371,10 @@ def get_history(user=Depends(get_current_user)):
 async def upload_timesheet(file: UploadFile = File(...), user=Depends(get_current_user)):
     try:
         file_bytes = await file.read()
-        wb = load_workbook(io.BytesIO(file_bytes))
+        try:
+            wb = load_workbook(io.BytesIO(file_bytes))
+        except InvalidFileException:
+            raise HTTPException(status_code=422, detail="Invalid Excel file. Please upload a valid .xlsx template.")
         ws = wb.active
 
         date_header_row, date_cells, task_row = detect_timesheet_structure(ws)
@@ -379,7 +383,7 @@ async def upload_timesheet(file: UploadFile = File(...), user=Depends(get_curren
 
         supabase.table("timesheet_templates").upsert({
             "user_id": user["sub"],
-            "file_data": file_bytes,
+            "file_data": base64.b64encode(file_bytes).decode("ascii"),
             "date_header_row": date_header_row,
             "task_row": task_row,
             "uploaded_at": datetime.utcnow().isoformat(),
@@ -444,11 +448,17 @@ def download_timesheet(user=Depends(get_current_user)):
     elif isinstance(file_data, (bytes, bytearray)):
         file_bytes = bytes(file_data)
     elif isinstance(file_data, str):
-        file_bytes = file_data.encode("utf-8")
+        try:
+            file_bytes = base64.b64decode(file_data)
+        except Exception:
+            file_bytes = file_data.encode("utf-8")
     else:
         raise HTTPException(status_code=500, detail="Stored timesheet template has unsupported file data format")
 
-    wb = load_workbook(io.BytesIO(file_bytes))
+    try:
+        wb = load_workbook(io.BytesIO(file_bytes))
+    except InvalidFileException:
+        raise HTTPException(status_code=500, detail="Stored timesheet template is invalid or corrupted")
     ws = wb.active
     date_header_row = template.get("date_header_row")
     task_row = template.get("task_row")
