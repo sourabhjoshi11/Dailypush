@@ -267,6 +267,151 @@ const Spinner = () => (
 );
 
 // ── History Page ───────────────────────────────────────────────────
+const TimesheetPage = ({ apiUrl }) => {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = (file) => {
+    setSelectedFile(file);
+    setSuccessMessage("");
+    setErrorMessage("");
+  };
+
+  const clearFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = null;
+  };
+
+  const handleUploadClick = () => {
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedFile) return;
+    setLoading(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const token = localStorage.getItem('dp_token');
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const res = await fetch(`${apiUrl}/timesheet/fill`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail || res.statusText || 'Failed to fill timesheet');
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition');
+      const filenameMatch = disposition && disposition.match(/filename="?(.+?)"?$/);
+      const filename = filenameMatch ? filenameMatch[1] : 'Timesheet_Filled.xlsx';
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      setSuccessMessage('Timesheet downloaded! Check your downloads folder.');
+    } catch (error) {
+      setErrorMessage(error.message || 'Unable to fill timesheet.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: '60px 24px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div>
+          <h1 style={styles.heading}>Monthly Timesheet</h1>
+          <p style={styles.subtitle}>Upload your timesheet template — task descriptions will be auto-filled from your daily updates.</p>
+        </div>
+
+        <div
+          style={{
+            ...styles.glass,
+            borderStyle: 'dashed',
+            borderColor: 'rgba(255,255,255,0.16)',
+            padding: 32,
+            cursor: 'pointer',
+            textAlign: 'center',
+          }}
+          onClick={handleUploadClick}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx"
+            style={{ display: 'none' }}
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) handleFileSelect(file);
+            }}
+          />
+          <p style={{ color: '#cbd5e1', fontSize: 14, marginBottom: 8 }}>Click to upload your timesheet template (.xlsx)</p>
+          <p style={{ color: '#94a3b8', fontSize: 13 }}>Supports Excel files only.</p>
+        </div>
+
+        {selectedFile && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, ...styles.glass, padding: '16px 20px' }}>
+            <span style={{ color: '#f8fafc', fontSize: 14 }}>{selectedFile.name}</span>
+            <button
+              onClick={clearFile}
+              style={{ background: 'transparent', border: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: 13 }}
+            >
+              ✕ remove
+            </button>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div style={{ marginTop: 12, padding: '14px 18px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, color: '#fca5a5', fontSize: 13 }}>
+            {errorMessage}
+          </div>
+        )}
+
+        {successMessage && (
+          <div style={{ marginTop: 12, padding: '14px 18px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 12, color: '#a7f3d0', fontSize: 13 }}>
+            {successMessage}
+          </div>
+        )}
+
+        <button
+          onClick={handleSubmit}
+          disabled={!selectedFile || loading}
+          style={{
+            ...styles.buttonPrimary,
+            opacity: (!selectedFile || loading) ? 0.6 : 1,
+            cursor: (!selectedFile || loading) ? 'not-allowed' : 'pointer',
+            width: 'fit-content',
+          }}
+        >
+          {loading ? (
+            <><Spinner /> Filling timesheet...</>
+          ) : (
+            'Fill Timesheet'
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const HistoryPage = ({ apiUrl, user }) => {
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -466,10 +611,11 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [isPrompting, setIsPrompting] = useState(false);
   const [isReleasingMic, setIsReleasingMic] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
   const [debugAudioUrl, setDebugAudioUrl] = useState(null);
-  const mediaRecorder = useRef(null);
-  const audioChunks = useRef([]);
+  const recognitionRef = useRef(null);
+  const isManualStop = useRef(false);
+  // const mediaRecorder = useRef(null);
+  // const audioChunks = useRef([]);
   const [toEmails, setToEmails] = useState([]);
   const [ccEmails, setCcEmails] = useState([]);
   const [bccEmails, setBccEmails] = useState([]);
@@ -576,23 +722,30 @@ export default function App() {
   }, [voiceMode, currentFieldIndex, template]);
 
   const stopRecording = () => {
-    if (!mediaRecorder.current) return;
+    if (recognitionRef.current) {
+      isManualStop.current = true;
+      recognitionRef.current.stop();
+    }
     setIsRecording(false);
-    mediaRecorder.current.stop();
   };
 
   const handleRerecord = () => {
     if (!template) return;
     const fieldKey = template.fields[currentFieldIndex]?.key;
     if (fieldKey) handleFieldChange(fieldKey, "");
-    audioChunks.current = [];
-    if (isRecording) stopRecording();
+    if (recognitionRef.current) {
+      isManualStop.current = true;
+      recognitionRef.current.stop();
+    }
+    setIsRecording(false);
   };
 
   const handleNextVoiceField = () => {
     if (!template) return;
-    if (isRecording) stopRecording();
-    audioChunks.current = [];
+    if (isRecording && recognitionRef.current) {
+      isManualStop.current = true;
+      recognitionRef.current.stop();
+    }
     const nextIndex = currentFieldIndex + 1;
     if (nextIndex >= template.fields.length) {
       setVoiceMode(false);
@@ -610,17 +763,78 @@ export default function App() {
       } else {
         setCurrentFieldIndex(0);
         window.speechSynthesis.cancel();
-        if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
-          mediaRecorder.current.stop();
+        if (recognitionRef.current) {
+          isManualStop.current = true;
+          recognitionRef.current.stop();
         }
       }
       return next;
     });
-    audioChunks.current = [];
     setIsRecording(false);
-    setTranscribing(false);
   };
 
+  const startRecording = () => {
+    if (!template || !template.fields[currentFieldIndex]) return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setErrorMsg("Speech recognition isn't supported in this browser. Try Chrome or Edge.");
+      setStatus("error");
+      return;
+    }
+
+    const fieldKey = template.fields[currentFieldIndex]?.key;
+    if (!fieldKey) return;
+
+    if (window.speechSynthesis.speaking || isPrompting) {
+      window.speechSynthesis.cancel();
+      setIsPrompting(false);
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    isManualStop.current = false;
+
+    let finalTranscript = formData[fieldKey] || "";
+
+    recognition.onresult = (event) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += (finalTranscript ? " " : "") + transcript;
+        } else {
+          interim += transcript;
+        }
+      }
+      handleFieldChange(fieldKey, finalTranscript + (interim ? " " + interim : ""));
+    };
+
+    recognition.onerror = (event) => {
+      setErrorMsg(`Speech recognition error: ${event.error}`);
+      setStatus("error");
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      if (isRecording && !isManualStop.current) {
+        recognition.start();
+      } else {
+        setIsRecording(false);
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+    setErrorMsg("");
+    setStatus(null);
+  };
+
+  /*
+  // Legacy Whisper / MediaRecorder flow
   const startRecording = async () => {
     if (!template || !template.fields[currentFieldIndex]) return;
     audioChunks.current = [];
@@ -708,6 +922,7 @@ export default function App() {
       setStatus('error');
     }
   };
+  */
 
   const refineContent = async () => {
     if (!formData[template.fields[0].key]) { setErrorMsg("Fill in at least the first field."); setStatus("error"); return; }
@@ -880,6 +1095,16 @@ export default function App() {
           >
             {page === 'history' ? '← Compose' : 'History'}
           </button>
+          <button
+            onClick={() => setPage('timesheet')}
+            style={{
+              ...styles.buttonSecondary, padding: '8px 16px', fontSize: 13,
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+          >
+            Timesheet
+          </button>
           
           <div style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.08)' }} />
           
@@ -1017,6 +1242,7 @@ export default function App() {
 
       {/* History Page */}
       {page === 'history' && <HistoryPage apiUrl={API_URL} user={user} />}
+      {page === 'timesheet' && <TimesheetPage apiUrl={API_URL} />}
 
       {/* Main App */}
       {page === 'app' && (
@@ -1227,19 +1453,19 @@ export default function App() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 22 }}>
                       <button
                         onClick={isRecording ? stopRecording : startRecording}
-                        disabled={isPrompting || transcribing || isReleasingMic}
+                        disabled={isPrompting}
                         style={{
                           ...styles.buttonPrimary,
                           minWidth: 150,
                           background: isRecording ? '#ef4444' : '#6366f1',
-                          opacity: (isPrompting || transcribing || isReleasingMic) ? 0.5 : 1,
-                          cursor: (isPrompting || transcribing || isReleasingMic) ? 'not-allowed' : 'pointer',
+                          opacity: isPrompting ? 0.5 : 1,
+                          cursor: isPrompting ? 'not-allowed' : 'pointer',
                         }}
                       >
                         {isRecording ? '⏹ Stop' : '🎤 Record'}
                       </button>
                       <div style={{ fontSize: 13, color: '#94a3af' }}>
-                        {isPrompting ? 'Waiting for prompt to finish...' : isReleasingMic ? 'Resetting microphone...' : isRecording ? 'Recording...' : transcribing ? 'Transcribing...' : 'Ready to capture audio.'}
+                        {isPrompting ? 'Waiting for prompt to finish...' : isRecording ? 'Listening... speak now' : 'Click record and speak your answer'}
                       </div>
                     </div>
 
@@ -1253,7 +1479,6 @@ export default function App() {
                       value={formData[template.fields[currentFieldIndex].key] || ''}
                       onChange={e => handleFieldChange(template.fields[currentFieldIndex].key, e.target.value)}
                       rows={6}
-                      disabled={transcribing}
                       onFocus={e => { e.currentTarget.style.border = '1px solid rgba(99,102,241,0.5)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
                       onBlur={e => { e.currentTarget.style.border = '1px solid rgba(255,255,255,0.08)'; e.currentTarget.style.boxShadow = 'none'; }}
                     />
@@ -1268,7 +1493,6 @@ export default function App() {
                       <button
                         onClick={handleNextVoiceField}
                         style={{ ...styles.buttonPrimary, minWidth: 140 }}
-                        disabled={transcribing}
                       >
                         Next →
                       </button>

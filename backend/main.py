@@ -1,14 +1,17 @@
 from fastapi import FastAPI, HTTPException, Depends, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 import httpx
 import os
 from dotenv import load_dotenv
 from supabase import create_client
 from jose import jwt, JWTError
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from pydantic import BaseModel
 from typing import Optional
+import io
+import re
+from openpyxl import load_workbook
 import json
 
 load_dotenv()
@@ -285,6 +288,99 @@ def get_history(user=Depends(get_current_user)):
         .order("created_at", desc=True) \
         .execute()
     return res.data
+
+@app.post("/timesheet/fill")
+async def fill_timesheet(file: UploadFile = File(...), user=Depends(get_current_user)):
+    try:
+        file_bytes = await file.read()
+        wb = load_workbook(io.BytesIO(file_bytes))
+        ws = wb.active
+
+        best_date_row = None
+        best_date_cells = {}
+        for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=10), start=1):
+            date_cells = {}
+            for cell in row:
+                if isinstance(cell.value, (datetime, date)):
+                    date_cells[cell.column - 1] = cell.value.date() if isinstance(cell.value, datetime) else cell.value
+            if len(date_cells) > len(best_date_cells):
+                best_date_cells = date_cells
+                best_date_row = row_idx
+
+        if not best_date_cells:
+            raise HTTPException(status_code=422, detail="Could not detect timesheet structure. Please ensure the file has a row of dates and a row for task descriptions.")
+
+        best_task_row = None
+        best_average_length = 0
+        for row_idx in range(best_date_row + 1, best_date_row + 16):
+            values = list(ws.iter_rows(min_row=row_idx, max_row=row_idx, values_only=True))[0]
+            lengths = []
+            for col_idx in best_date_cells.keys():
+                cell_value = values[col_idx] if col_idx < len(values) else None
+                if isinstance(cell_value, str) and cell_value.strip():
+                    lengths.append(len(cell_value.strip()))
+            if not lengths:
+                continue
+            average_length = sum(lengths) / len(lengths)
+            if average_length >= 20 and average_length > best_average_length:
+                best_average_length = average_length
+                best_task_row = row_idx
+
+        if best_task_row is None:
+            raise HTTPException(status_code=422, detail="Could not detect timesheet structure. Please ensure the file has a row of dates and a row for task descriptions.")
+
+        label_patterns = [
+            r"Completed Tasks",
+            r"Done",
+            r"Accomplishments",
+            r"Work Completed",
+            r"What I accomplished",
+        ]
+
+        def extract_task_text(body: str) -> str:
+            for label in label_patterns:
+                pattern = re.compile(rf"(?:{label})\s*:\s*(.*?)(?=\n[A-Z][a-zA-Z /]*:|\Z)", re.DOTALL | re.IGNORECASE)
+                match = pattern.search(body)
+                if match:
+                    return match.group(1).strip()
+            return body.strip()
+
+        first_date = None
+        for col_idx, date_value in best_date_cells.items():
+            if first_date is None:
+                first_date = date_value
+
+            start_of_day = datetime(date_value.year, date_value.month, date_value.day)
+            end_of_day = start_of_day + timedelta(days=1)
+            res = supabase.table("sent_emails") \
+                .select("body") \
+                .eq("user_id", user["sub"]) \
+                .gte("created_at", start_of_day.isoformat()) \
+                .lt("created_at", end_of_day.isoformat()) \
+                .order("created_at", desc=True) \
+                .limit(1) \
+                .execute()
+
+            if res.data:
+                body_text = res.data[0].get("body", "") or ""
+                extracted = extract_task_text(body_text)
+                ws.cell(row=best_task_row, column=col_idx + 1).value = extracted
+
+        if first_date is None:
+            raise HTTPException(status_code=422, detail="Could not detect timesheet structure. Please ensure the file has a row of dates and a row for task descriptions.")
+
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        filename = f"Timesheet_Filled_{first_date.year}-{first_date.month:02d}.xlsx"
+        headers = {"Content-Disposition": f"attachment; filename=\"{filename}\""}
+
+        return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers=headers)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ── Templates ─────────────────────────────────────────────────
 class TemplateModel(BaseModel):
