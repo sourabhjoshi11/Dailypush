@@ -35,13 +35,13 @@ const API_URL = "https://dailypush-backend.onrender.com";
 
 // ── Utility Functions ──────────────────────────────────────────────
 const buildPrompt = (template, formData) => {
-  let prompt = template.aiPrompt || "";
+  let prompt = template.aiPrompt || template.ai_prompt || "";
   template.fields.forEach(f => {
     prompt = prompt.replace(new RegExp(`{{${f.key}}}`, "g"), formData[f.key] || "N/A");
   });
 
-  if (/\{\{.*?\}\}/.test(prompt)) {
-    console.warn("Template prompt had unmatched placeholders, falling back to auto-generated prompt");
+  if (!prompt.trim() || /\{\{.*?\}\}/.test(prompt)) {
+    console.warn("Template prompt was empty or had unmatched placeholders, falling back to auto-generated prompt");
     const vars = template.fields.map(f => `${f.label}: ${formData[f.key] || "N/A"}`).join("\n");
     prompt = `Refine this ${template.name || "update"} into a concise, professional format.\n\n${vars}`;
   }
@@ -666,7 +666,12 @@ export default function App() {
     const token = localStorage.getItem("dp_token");
     fetch(`${API_URL}/templates`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(data => setCustomTemplates(Array.isArray(data) ? data : []))
+      .then(data => {
+        const normalized = Array.isArray(data)
+          ? data.map(t => ({ ...t, aiPrompt: t.ai_prompt }))
+          : [];
+        setCustomTemplates(normalized);
+      })
       .catch(() => {});
   }, [user]);
 
