@@ -465,6 +465,7 @@ export default function App() {
   const [currentFieldIndex, setCurrentFieldIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [isPrompting, setIsPrompting] = useState(false);
+  const [isReleasingMic, setIsReleasingMic] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
@@ -589,6 +590,8 @@ export default function App() {
 
   const handleNextVoiceField = () => {
     if (!template) return;
+    if (isRecording) stopRecording();
+    audioChunks.current = [];
     const nextIndex = currentFieldIndex + 1;
     if (nextIndex >= template.fields.length) {
       setVoiceMode(false);
@@ -619,10 +622,18 @@ export default function App() {
 
   const startRecording = async () => {
     if (!template || !template.fields[currentFieldIndex]) return;
+    audioChunks.current = [];
     if (!navigator.mediaDevices?.getUserMedia) {
       setErrorMsg("Microphone access is not available in this browser.");
       setStatus("error");
       return;
+    }
+
+    if (mediaRecorder.current && mediaRecorder.current.stream) {
+      setIsReleasingMic(true);
+      mediaRecorder.current.stream.getTracks().forEach(t => t.stop());
+      await new Promise(resolve => setTimeout(resolve, 100));
+      setIsReleasingMic(false);
     }
 
     if (window.speechSynthesis.speaking || isPrompting) {
@@ -632,6 +643,7 @@ export default function App() {
     }
 
     try {
+      const fieldKeyAtStart = template.fields[currentFieldIndex]?.key;
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -649,7 +661,7 @@ export default function App() {
 
       recorder.onstop = async () => {
         try {
-          const fieldKey = template.fields[currentFieldIndex]?.key;
+          const fieldKey = fieldKeyAtStart;
           if (!fieldKey) return;
           const blob = new Blob(audioChunks.current, { type: 'audio/webm' });
           const body = new FormData();
@@ -1210,19 +1222,19 @@ export default function App() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 22 }}>
                       <button
                         onClick={isRecording ? stopRecording : startRecording}
-                        disabled={isPrompting || transcribing}
+                        disabled={isPrompting || transcribing || isReleasingMic}
                         style={{
                           ...styles.buttonPrimary,
                           minWidth: 150,
                           background: isRecording ? '#ef4444' : '#6366f1',
-                          opacity: (isPrompting || transcribing) ? 0.5 : 1,
-                          cursor: (isPrompting || transcribing) ? 'not-allowed' : 'pointer',
+                          opacity: (isPrompting || transcribing || isReleasingMic) ? 0.5 : 1,
+                          cursor: (isPrompting || transcribing || isReleasingMic) ? 'not-allowed' : 'pointer',
                         }}
                       >
                         {isRecording ? '⏹ Stop' : '🎤 Record'}
                       </button>
                       <div style={{ fontSize: 13, color: '#94a3af' }}>
-                        {isPrompting ? 'Waiting for prompt to finish...' : isRecording ? 'Recording...' : transcribing ? 'Transcribing...' : 'Ready to capture audio.'}
+                        {isPrompting ? 'Waiting for prompt to finish...' : isReleasingMic ? 'Resetting microphone...' : isRecording ? 'Recording...' : transcribing ? 'Transcribing...' : 'Ready to capture audio.'}
                       </div>
                     </div>
 
