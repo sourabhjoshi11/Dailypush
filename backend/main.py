@@ -199,8 +199,7 @@ async def transcribe_audio(file: UploadFile = File(...), user=Depends(get_curren
                 "prompt": "This is a professional work update by [USER]. It may include names, project names, and technical terms like MOM, blockers, dependencies.",
                 "temperature": "0.2",
                 "response_format": "json",
-                "logprob_threshold": "-1.0",
-                "compression_ratio_threshold": "2.4",
+               
             }
             res = await client.post(
                 "https://api.groq.com/openai/v1/audio/transcriptions",
