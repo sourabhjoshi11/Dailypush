@@ -280,7 +280,7 @@ async def send_email(payload: SendEmailRequest, user=Depends(get_current_user)):
 # ── Sent emails history ───────────────────────────────────────
 @app.get("/emails/history")
 def get_history(user=Depends(get_current_user)):
-    cutoff = (datetime.utcnow() - timedelta(days=5)).isoformat()
+    cutoff = (datetime.utcnow() - timedelta(days=7)).isoformat()
     res = supabase.table("sent_emails") \
         .select("*") \
         .eq("user_id", user["sub"]) \
@@ -310,21 +310,34 @@ async def fill_timesheet(file: UploadFile = File(...), user=Depends(get_current_
         if not best_date_cells:
             raise HTTPException(status_code=422, detail="Could not detect timesheet structure. Please ensure the file has a row of dates and a row for task descriptions.")
 
+        ATTENDANCE_CODES = {"p", "present", "leave", "absent", "h", "public holiday", "week off", "weekend", "half day", "comp off"}
+
         best_task_row = None
-        best_average_length = 0
-        for row_idx in range(best_date_row + 1, best_date_row + 16):
-            values = list(ws.iter_rows(min_row=row_idx, max_row=row_idx, values_only=True))[0]
-            lengths = []
-            for col_idx in best_date_cells.keys():
-                cell_value = values[col_idx] if col_idx < len(values) else None
-                if isinstance(cell_value, str) and cell_value.strip():
-                    lengths.append(len(cell_value.strip()))
-            if not lengths:
-                continue
-            average_length = sum(lengths) / len(lengths)
-            if average_length >= 20 and average_length > best_average_length:
-                best_average_length = average_length
-                best_task_row = row_idx
+        for row_idx in range(best_date_row + 1, min(best_date_row + 16, ws.max_row) + 1):
+            cell_a_value = ws.cell(row=row_idx, column=1).value
+            cell_b_value = ws.cell(row=row_idx, column=2).value
+            if cell_a_value and str(cell_a_value).strip().lower() in ATTENDANCE_CODES:
+                best_task_row = row_idx - 1
+                break
+            if cell_b_value and str(cell_b_value).strip().lower() in ATTENDANCE_CODES:
+                best_task_row = row_idx - 1
+                break
+
+        if best_task_row is None:
+            best_average_length = 0
+            for row_idx in range(best_date_row + 1, best_date_row + 16):
+                values = list(ws.iter_rows(min_row=row_idx, max_row=row_idx, values_only=True))[0]
+                lengths = []
+                for col_idx in best_date_cells.keys():
+                    cell_value = values[col_idx] if col_idx < len(values) else None
+                    if isinstance(cell_value, str) and cell_value.strip():
+                        lengths.append(len(cell_value.strip()))
+                if not lengths:
+                    continue
+                average_length = sum(lengths) / len(lengths)
+                if average_length >= 20 and average_length > best_average_length:
+                    best_average_length = average_length
+                    best_task_row = row_idx
 
         if best_task_row is None:
             raise HTTPException(status_code=422, detail="Could not detect timesheet structure. Please ensure the file has a row of dates and a row for task descriptions.")
