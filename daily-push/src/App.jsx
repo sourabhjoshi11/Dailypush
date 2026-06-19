@@ -39,6 +39,13 @@ const buildPrompt = (template, formData) => {
   template.fields.forEach(f => {
     prompt = prompt.replace(new RegExp(`{{${f.key}}}`, "g"), formData[f.key] || "N/A");
   });
+
+  if (/\{\{.*?\}\}/.test(prompt)) {
+    console.warn("Template prompt had unmatched placeholders, falling back to auto-generated prompt");
+    const vars = template.fields.map(f => `${f.label}: ${formData[f.key] || "N/A"}`).join("\n");
+    prompt = `Refine this ${template.name || "update"} into a concise, professional format.\n\n${vars}`;
+  }
+
   return prompt;
 };
 
@@ -634,6 +641,7 @@ export default function App() {
 
   const [tb, setTb] = useState({ name:"", rawText:"", fields:[], aiPrompt:"" });
   const [tbParsed, setTbParsed] = useState(false);
+  const [promptManuallyEdited, setPromptManuallyEdited] = useState(false);
 
   const allTemplates = useMemo(() => [...DEFAULT_TEMPLATES, ...customTemplates], [customTemplates]);
   const template = allTemplates.find(t => t.id === selectedTemplate);
@@ -671,17 +679,19 @@ export default function App() {
     const vars = fields.map(f => `${f.label}: {{${f.key}}}`).join("\n");
     setTb(p => ({ ...p, fields, aiPrompt: `Refine this ${tb.name||"update"} into a concise, professional format.\n\n${vars}` }));
     setTbParsed(true);
+    setPromptManuallyEdited(false);
   };
 
   const tbSave = async () => {
     if (!tb.name || !tb.fields.length) return;
     const token = localStorage.getItem("dp_token");
+    const finalAiPrompt = promptManuallyEdited ? tb.aiPrompt : `Refine this ${tb.name||"update"} into a concise, professional format.\n\n${tb.fields.map(f => `${f.label}: {{${f.key}}}`).join("\n")}`;
     try {
       const url = editingTemplate ? `${API_URL}/templates/${editingTemplate.id}` : `${API_URL}/templates`;
       const method = editingTemplate ? "PUT" : "POST";
       const res = await fetch(url, {
         method, headers: { "Content-Type":"application/json", Authorization:`Bearer ${token}` },
-        body: JSON.stringify({ name:tb.name, raw_text:tb.rawText, fields:tb.fields, ai_prompt:tb.aiPrompt }),
+        body: JSON.stringify({ name:tb.name, raw_text:tb.rawText, fields:tb.fields, ai_prompt:finalAiPrompt }),
       });
       const saved = await res.json();
       if (editingTemplate) {
@@ -1192,7 +1202,11 @@ export default function App() {
                     AI Prompt
                   </label>
                   <textarea style={{...styles.input, resize: 'vertical'}}
-                    value={tb.aiPrompt} onChange={e => setTb(p => ({...p, aiPrompt: e.target.value}))}
+                    value={tb.aiPrompt}
+                    onChange={e => {
+                      setTb(p => ({...p, aiPrompt: e.target.value}));
+                      setPromptManuallyEdited(true);
+                    }}
                     rows={5} />
                 </div>
               )}
