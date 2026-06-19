@@ -384,7 +384,7 @@ async def upload_timesheet(file: UploadFile = File(...), user=Depends(get_curren
 
         supabase.table("timesheet_templates").upsert({
             "user_id": user["sub"],
-            "file_data": file_bytes,
+            "file_data": base64.b64encode(file_bytes).decode("ascii"),
             "date_header_row": date_header_row,
             "task_row": task_row,
             "uploaded_at": datetime.utcnow().isoformat(),
@@ -420,7 +420,8 @@ async def upload_timesheet(file: UploadFile = File(...), user=Depends(get_curren
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Timesheet upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Timesheet upload failed. Please try again or contact support.")
 
 
 @app.get("/timesheet/preview")
