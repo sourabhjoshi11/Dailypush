@@ -384,7 +384,7 @@ async def upload_timesheet(file: UploadFile = File(...), user=Depends(get_curren
 
         supabase.table("timesheet_templates").upsert({
             "user_id": user["sub"],
-            "file_data": base64.b64encode(file_bytes).decode("ascii"),
+            "file_data": file_bytes,
             "date_header_row": date_header_row,
             "task_row": task_row,
             "uploaded_at": datetime.utcnow().isoformat(),
@@ -433,6 +433,32 @@ def preview_timesheet(user=Depends(get_current_user)):
     return res.data or []
 
 
+def _load_template_bytes(file_data):
+    if isinstance(file_data, memoryview):
+        file_bytes = file_data.tobytes()
+    elif isinstance(file_data, (bytes, bytearray)):
+        file_bytes = bytes(file_data)
+    elif isinstance(file_data, str):
+        try:
+            file_bytes = base64.b64decode(file_data, validate=True)
+        except Exception:
+            file_bytes = file_data.encode("utf-8")
+    else:
+        raise HTTPException(status_code=500, detail="Stored timesheet template has unsupported file data format")
+
+    # Recover from legacy storage where bytes may contain base64 text.
+    try:
+        load_workbook(io.BytesIO(file_bytes))
+        return file_bytes
+    except (InvalidFileException, zipfile.BadZipFile):
+        try:
+            decoded = base64.b64decode(file_bytes, validate=True)
+            load_workbook(io.BytesIO(decoded))
+            return decoded
+        except Exception:
+            raise HTTPException(status_code=500, detail="Stored timesheet template is invalid or corrupted. Please re-upload the template.")
+
+
 @app.get("/timesheet/download")
 def download_timesheet(user=Depends(get_current_user)):
     res = supabase.table("timesheet_templates").select("*").eq("user_id", user["sub"]).limit(1).execute()
@@ -444,22 +470,8 @@ def download_timesheet(user=Depends(get_current_user)):
     if file_data is None:
         raise HTTPException(status_code=404, detail="No timesheet template uploaded yet")
 
-    if isinstance(file_data, memoryview):
-        file_bytes = file_data.tobytes()
-    elif isinstance(file_data, (bytes, bytearray)):
-        file_bytes = bytes(file_data)
-    elif isinstance(file_data, str):
-        try:
-            file_bytes = base64.b64decode(file_data)
-        except Exception:
-            file_bytes = file_data.encode("utf-8")
-    else:
-        raise HTTPException(status_code=500, detail="Stored timesheet template has unsupported file data format")
-
-    try:
-        wb = load_workbook(io.BytesIO(file_bytes))
-    except (InvalidFileException, zipfile.BadZipFile):
-        raise HTTPException(status_code=500, detail="Stored timesheet template is invalid or corrupted. Please re-upload the template.")
+    file_bytes = _load_template_bytes(file_data)
+    wb = load_workbook(io.BytesIO(file_bytes))
     ws = wb.active
     date_header_row = template.get("date_header_row")
     task_row = template.get("task_row")
