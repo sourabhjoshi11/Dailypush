@@ -14,6 +14,7 @@ import io
 import re
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
+import zipfile
 import json
 
 load_dotenv()
@@ -457,8 +458,8 @@ def download_timesheet(user=Depends(get_current_user)):
 
     try:
         wb = load_workbook(io.BytesIO(file_bytes))
-    except InvalidFileException:
-        raise HTTPException(status_code=500, detail="Stored timesheet template is invalid or corrupted")
+    except (InvalidFileException, zipfile.BadZipFile):
+        raise HTTPException(status_code=500, detail="Stored timesheet template is invalid or corrupted. Please re-upload the template.")
     ws = wb.active
     date_header_row = template.get("date_header_row")
     task_row = template.get("task_row")
