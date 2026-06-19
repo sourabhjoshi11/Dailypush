@@ -5,3 +5,4 @@ python-dotenv>=1.0.1
 supabase>=2.4.6
 python-jose>=3.3.0
 pydantic>=2.7.1
+python-multipart>=0.0.6
